@@ -1,10 +1,10 @@
 import pytest
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
-from tests.conftest import FakeCache, FakeModel, FakeRepository, defaults
 
 from support_copilot.graph import GraphDependencies, build_graph, build_nodes
 from support_copilot.schemas import Extraction, RouteDecision
+from tests.conftest import FakeCache, FakeModel, FakeRepository, defaults
 
 
 @pytest.mark.asyncio
