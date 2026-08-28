@@ -18,7 +18,7 @@ dependencies = [
   "pydantic==2.11.3",
   "pydantic-settings==2.8.1",
   "python-dotenv==1.1.0",
-  "sqlparse==0.5.3",
+  "sqlglot==30.17.0",
   "uvicorn[standard]==0.34.1",
 ]
 

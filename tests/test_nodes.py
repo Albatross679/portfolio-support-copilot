@@ -69,5 +69,10 @@ def test_sql_schema_rejects_writes() -> None:
         validate_readonly_sql("SELECT pg_read_file('/etc/passwd') FROM orders LIMIT 1")
     with pytest.raises(ValueError):
         validate_readonly_sql("SELECT public.count(*) FROM orders")
+    with pytest.raises(ValueError):
+        validate_readonly_sql("SELECT p.* FROM orders o, pg_catalog.pg_tables p")
+    with pytest.raises(ValueError):
+        validate_readonly_sql("SELECT * FROM orders WHERE product_id IN (SELECT oid FROM pg_catalog.pg_class)")
     validate_readonly_sql("SELECT title, format FROM products")
     validate_readonly_sql("SELECT COUNT(*) FROM orders")
+    validate_readonly_sql("WITH recent AS (SELECT * FROM orders) SELECT COUNT(*) FROM recent")

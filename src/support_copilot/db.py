@@ -1,5 +1,4 @@
 import json
-import re
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -8,14 +7,12 @@ from psycopg import AsyncConnection
 from psycopg import sql as psycopg_sql
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
-from sqlparse import parse
-from sqlparse.sql import Function, TokenList
+from sqlglot import exp, parse
+from sqlglot.errors import ParseError
+from sqlglot.optimizer.scope import traverse_scope
 
 from support_copilot.schemas import RefundProposal
 
-WRITE_SQL = re.compile(
-    r"\b(insert|update|delete|drop|alter|create|grant|revoke|truncate|copy|call|do|vacuum)\b", re.IGNORECASE
-)
 ALLOWED_TABLES = {"customers", "products", "orders"}
 ALLOWED_FUNCTIONS = {
     "avg",
@@ -28,9 +25,9 @@ ALLOWED_FUNCTIONS = {
     "min",
     "round",
     "sum",
+    "timestamp_trunc",
     "upper",
 }
-QUALIFIED_FUNCTION = re.compile(r"\b[a-z_][\w$]*\s*\.\s*[a-z_][\w$]*\s*\(", re.IGNORECASE)
 
 
 class StoreRepository:
@@ -98,30 +95,32 @@ def vector_literal(values: Sequence[float]) -> str:
 
 def validate_readonly_sql(sql: str) -> None:
     normalized = sql.strip()
-    if not normalized.lower().startswith(("select", "with")):
+    try:
+        statements = parse(normalized, read="postgres")
+    except ParseError as error:
+        raise ValueError("SQL could not be parsed") from error
+    if len(statements) != 1 or not isinstance(statements[0], exp.Query):
         raise ValueError("Only SELECT queries are permitted")
-    if ";" in normalized.rstrip(";") or WRITE_SQL.search(normalized):
-        raise ValueError("Write SQL is not permitted")
-    referenced = set(re.findall(r"\b(?:from|join)\s+([a-z_]+)", normalized, flags=re.IGNORECASE))
-    if not referenced or not referenced.issubset(ALLOWED_TABLES):
+    statement = statements[0]
+    tables = [
+        source
+        for scope in traverse_scope(statement)
+        for source in scope.sources.values()
+        if isinstance(source, exp.Table)
+    ]
+    if not tables or any(table.catalog or table.db or table.name.lower() not in ALLOWED_TABLES for table in tables):
         raise ValueError("Query must reference only business tables")
-    if QUALIFIED_FUNCTION.search(normalized):
+    if any(isinstance(dot.expression, exp.Func) for dot in statement.find_all(exp.Dot)):
         raise ValueError("Schema-qualified functions are not permitted")
-    functions = function_names(parse(normalized)[0])
+    functions = {function_name(function) for function in statement.find_all(exp.Func)}
     if not functions.issubset(ALLOWED_FUNCTIONS):
         raise ValueError("Query contains a function that is not permitted")
 
 
-def function_names(token: TokenList) -> set[str]:
-    names: set[str] = set()
-    for child in token.tokens:
-        if isinstance(child, Function):
-            name = child.get_name()
-            if name:
-                names.add(name.lower())
-        if isinstance(child, TokenList):
-            names.update(function_names(child))
-    return names
+def function_name(function: exp.Func) -> str:
+    if isinstance(function, exp.Anonymous):
+        return function.name.lower()
+    return function.sql_name().lower()
 
 
 async def apply_schema(conn: AsyncConnection[Any], embedding_dim: int) -> None:
