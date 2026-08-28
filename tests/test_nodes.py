@@ -65,4 +65,9 @@ def test_sql_schema_rejects_writes() -> None:
         validate_readonly_sql("DELETE FROM orders")
     with pytest.raises(ValueError):
         validate_readonly_sql("SELECT * FROM help_document_embeddings")
+    with pytest.raises(ValueError):
+        validate_readonly_sql("SELECT pg_read_file('/etc/passwd') FROM orders LIMIT 1")
+    with pytest.raises(ValueError):
+        validate_readonly_sql("SELECT public.count(*) FROM orders")
     validate_readonly_sql("SELECT title, format FROM products")
+    validate_readonly_sql("SELECT COUNT(*) FROM orders")

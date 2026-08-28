@@ -41,8 +41,12 @@ async def write_status(redis: Any, run_id: str, **update: Any) -> None:
 
 def state_payload(snapshot: Any) -> dict[str, Any]:
     values = snapshot.values
-    payload = {key: values[key] for key in ("extraction", "proposed_refund", "answer") if key in values}
-    if "routing" in values:
+    payload = {
+        key: values[key]
+        for key in ("extraction", "proposed_refund", "answer")
+        if values.get(key) is not None
+    }
+    if values.get("routing") is not None:
         payload["route"] = values["routing"]
     return payload
 
@@ -56,26 +60,42 @@ def interrupt_payload(snapshot: Any) -> dict[str, Any]:
 
 
 async def run_agent(ctx: dict[str, Any], run_id: str, message: str, thread_id: str) -> dict[str, Any]:
-    await write_status(ctx["redis"], run_id, status="running")
     config = {"configurable": {"thread_id": thread_id}}
     try:
-        await ctx["graph"].ainvoke({"message": message}, config=config, durability="sync")
-        snapshot = await ctx["graph"].aget_state(config)
-        payload = interrupt_payload(snapshot)
-        if payload:
-            await write_status(
-                ctx["redis"],
-                run_id,
-                status="awaiting_approval",
-                **{
-                    **state_payload(snapshot),
-                    "proposed_refund": payload.get("proposed_refund"),
-                },
-            )
-            return {"status": "awaiting_approval"}
-        payload = state_payload(snapshot)
-        await write_status(ctx["redis"], run_id, status="completed", **payload)
-        return payload
+        async with ctx["redis"].lock(f"thread-lock:{thread_id}", timeout=240, blocking_timeout=180):
+            previous = await ctx["graph"].aget_state(config)
+            if interrupt_payload(previous):
+                raise ValueError("Thread already has a run awaiting approval")
+            await write_status(ctx["redis"], run_id, status="running")
+            initial_state = {
+                "run_id": run_id,
+                "message": message,
+                "extraction": None,
+                "routing": None,
+                "handler": None,
+                "tool_context": None,
+                "sources": None,
+                "proposed_refund": None,
+                "decision": None,
+                "answer": None,
+            }
+            await ctx["graph"].ainvoke(initial_state, config=config)
+            snapshot = await ctx["graph"].aget_state(config)
+            payload = interrupt_payload(snapshot)
+            if payload:
+                await write_status(
+                    ctx["redis"],
+                    run_id,
+                    status="awaiting_approval",
+                    **{
+                        **state_payload(snapshot),
+                        "proposed_refund": payload.get("proposed_refund"),
+                    },
+                )
+                return {"status": "awaiting_approval"}
+            payload = state_payload(snapshot)
+            await write_status(ctx["redis"], run_id, status="completed", **payload)
+            return payload
     except Exception as error:
         logger.exception("run %s failed", run_id)
         await write_status(ctx["redis"], run_id, status="failed", error=str(error))
@@ -83,14 +103,18 @@ async def run_agent(ctx: dict[str, Any], run_id: str, message: str, thread_id: s
 
 
 async def resume_agent(ctx: dict[str, Any], run_id: str, thread_id: str, decision: str) -> dict[str, Any]:
-    await write_status(ctx["redis"], run_id, status="running")
     config = {"configurable": {"thread_id": thread_id}}
     try:
-        await ctx["graph"].ainvoke(Command(resume=decision), config=config, durability="sync")
-        snapshot = await ctx["graph"].aget_state(config)
-        payload = state_payload(snapshot)
-        await write_status(ctx["redis"], run_id, status="completed", **payload)
-        return payload
+        async with ctx["redis"].lock(f"thread-lock:{thread_id}", timeout=240, blocking_timeout=180):
+            paused = await ctx["graph"].aget_state(config)
+            if paused.values.get("run_id") != run_id or not interrupt_payload(paused):
+                raise ValueError("Run does not own the paused thread checkpoint")
+            await write_status(ctx["redis"], run_id, status="running")
+            await ctx["graph"].ainvoke(Command(resume=decision), config=config)
+            snapshot = await ctx["graph"].aget_state(config)
+            payload = state_payload(snapshot)
+            await write_status(ctx["redis"], run_id, status="completed", **payload)
+            return payload
     except Exception as error:
         logger.exception("resume %s failed", run_id)
         await write_status(ctx["redis"], run_id, status="failed", error=str(error))

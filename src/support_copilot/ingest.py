@@ -25,13 +25,15 @@ def chunk_text(text: str, chunk_size: int = 700, overlap: int = 100) -> list[str
     return chunks
 
 
-async def ingest_help_documents(pool: AsyncConnectionPool, model: OpenRouterClient) -> int:
+async def ingest_help_documents(pool: AsyncConnectionPool, model: OpenRouterClient, embedding_dim: int) -> int:
     rows = [(path.name, index, chunk) for path in sorted(HELP_DIR.glob("*.md")) for index, chunk in enumerate(chunk_text(path.read_text()))]
     if not rows:
         return 0
     embeddings = await model.embed([row[2] for row in rows])
     if len(embeddings) != len(rows):
         raise ValueError("Embedding provider returned an unexpected number of vectors")
+    if any(len(embedding) != embedding_dim for embedding in embeddings):
+        raise ValueError(f"Embedding provider did not return {embedding_dim}-value vectors")
     async with pool.connection() as conn:
         await conn.execute("TRUNCATE help_document_embeddings RESTART IDENTITY")
         for (name, index, content), embedding in zip(rows, embeddings, strict=True):
@@ -54,7 +56,7 @@ async def main() -> None:
     await pool.open()
     model = OpenRouterClient(settings)
     try:
-        count = await ingest_help_documents(pool, model)
+        count = await ingest_help_documents(pool, model, settings.embedding_dim)
         print(f"Ingested {count} help-document chunks")
     finally:
         await model.close()

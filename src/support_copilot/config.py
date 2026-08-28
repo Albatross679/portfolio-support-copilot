@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,6 +12,7 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_model: str = "openai/gpt-4.1-mini"
     openrouter_embedding_model: str = "openai/text-embedding-3-small"
+    embedding_dim: int = Field(default=1536, ge=1, le=16000)
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
 
 

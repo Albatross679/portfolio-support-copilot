@@ -1,5 +1,13 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'support_copilot_reader') THEN
+    CREATE ROLE support_copilot_reader NOLOGIN;
+  END IF;
+END
+$$;
+
 CREATE TABLE IF NOT EXISTS customers (
   id BIGSERIAL PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,
@@ -31,8 +39,10 @@ CREATE TABLE IF NOT EXISTS help_document_embeddings (
   chunk_index INTEGER NOT NULL,
   content TEXT NOT NULL,
   metadata JSONB NOT NULL DEFAULT '{}',
-  embedding vector(1536) NOT NULL,
+  embedding vector({{EMBEDDING_DIM}}) NOT NULL,
   UNIQUE (document_name, chunk_index)
 );
 
-CREATE INDEX IF NOT EXISTS help_document_embeddings_embedding_idx ON help_document_embeddings USING ivfflat (embedding vector_cosine_ops) WITH (lists = 10);
+REVOKE ALL ON customers, products, orders FROM support_copilot_reader;
+GRANT SELECT ON customers, products, orders TO support_copilot_reader;
+GRANT support_copilot_reader TO CURRENT_USER;

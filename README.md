@@ -33,6 +33,8 @@ FastAPI accepts and reports runs only. The arq worker owns graph execution, whil
 
 The `init` Compose service applies the schema, seeds fake business data, creates LangGraph checkpoint tables, and embeds all documents in `docs/help/`. It exits successfully without a key so the API and worker can still boot, but RAG runs require embeddings and therefore an OpenRouter key. Re-ingest documents after changes with `docker compose run --rm init python scripts/ingest_help.py`.
 
+`EMBEDDING_DIM` defaults to 1536, which matches `openai/text-embedding-3-small`. When changing the embedding model or its output size, set both `OPENROUTER_EMBEDDING_MODEL` and `EMBEDDING_DIM`. Drop and recreate `help_document_embeddings`, then re-ingest the help documents. This project does not migrate stored embeddings between output sizes.
+
 ## Development and tests
 
 Install with `pip install . --group dev`, then run `ruff check .` and `pytest -m "not integration and not eval"`. Unit tests fake the model through dependency injection and cover extraction, routing, retrieval, SQL caching and safety, and the LangGraph pause/resume behavior.

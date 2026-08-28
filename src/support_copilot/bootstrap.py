@@ -20,14 +20,14 @@ async def bootstrap() -> None:
     await pool.open()
     try:
         async with pool.connection() as conn:
-            await apply_schema(conn)
+            await apply_schema(conn, settings.embedding_dim)
             await seed_business_data(conn)
         saver = AsyncPostgresSaver(pool)
         await saver.setup()
         if settings.openrouter_api_key:
             model = OpenRouterClient(settings)
             try:
-                await ingest_help_documents(pool, model)
+                await ingest_help_documents(pool, model, settings.embedding_dim)
             finally:
                 await model.close()
         else:

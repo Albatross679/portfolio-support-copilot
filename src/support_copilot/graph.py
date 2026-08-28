@@ -25,15 +25,16 @@ class CacheClient(Protocol):
 
 
 class SupportState(TypedDict, total=False):
+    run_id: str
     message: str
-    extraction: dict[str, Any]
-    routing: dict[str, Any]
-    handler: Literal["rag", "sql", "refund"]
-    tool_context: str
-    sources: list[str]
-    proposed_refund: dict[str, Any]
-    decision: Literal["approve", "reject"]
-    answer: str
+    extraction: dict[str, Any] | None
+    routing: dict[str, Any] | None
+    handler: Literal["rag", "sql", "refund"] | None
+    tool_context: str | None
+    sources: list[str] | None
+    proposed_refund: dict[str, Any] | None
+    decision: Literal["approve", "reject"] | None
+    answer: str | None
 
 
 class GraphDependencies:
@@ -53,6 +54,8 @@ def build_nodes(deps: GraphDependencies) -> dict[str, Any]:
         return {"extraction": extraction.model_dump()}
 
     async def route(state: SupportState) -> dict[str, Any]:
+        if state["extraction"] is None:
+            raise ValueError("Extraction is missing")
         extraction = json.dumps(state["extraction"])
         decision = await deps.model.structured(
             RouteDecision,
@@ -83,6 +86,8 @@ def build_nodes(deps: GraphDependencies) -> dict[str, Any]:
         return {"tool_context": json.dumps(rows, default=str), "sources": ["business database"]}
 
     async def refund(state: SupportState) -> dict[str, Any]:
+        if state["extraction"] is None:
+            raise ValueError("Extraction is missing")
         extraction = Extraction.model_validate(state["extraction"])
         proposal = await deps.repository.refund_proposal(extraction.order_number, extraction.issue_type)
         decision = interrupt({"proposed_refund": proposal.model_dump()})
@@ -112,7 +117,10 @@ def build_nodes(deps: GraphDependencies) -> dict[str, Any]:
 
 
 def choose_handler(state: SupportState) -> Literal["rag", "sql", "refund"]:
-    return state["handler"]
+    handler = state["handler"]
+    if handler is None:
+        raise ValueError("Handler is missing")
+    return handler
 
 
 def build_graph(deps: GraphDependencies, checkpointer: BaseCheckpointSaver[Any] | None = None) -> Any:
