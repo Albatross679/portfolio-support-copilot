@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from typing import Any
@@ -62,7 +63,7 @@ def interrupt_payload(snapshot: Any) -> dict[str, Any]:
 async def run_agent(ctx: dict[str, Any], run_id: str, message: str, thread_id: str) -> dict[str, Any]:
     config = {"configurable": {"thread_id": thread_id}}
     try:
-        async with ctx["redis"].lock(f"thread-lock:{thread_id}", timeout=240, blocking_timeout=180):
+        async with ctx["redis"].lock(f"thread-lock:{thread_id}", timeout=300, blocking_timeout=180):
             previous = await ctx["graph"].aget_state(config)
             if interrupt_payload(previous):
                 raise ValueError("Thread already has a run awaiting approval")
@@ -96,6 +97,10 @@ async def run_agent(ctx: dict[str, Any], run_id: str, message: str, thread_id: s
             payload = state_payload(snapshot)
             await write_status(ctx["redis"], run_id, status="completed", **payload)
             return payload
+    except asyncio.CancelledError:
+        logger.warning("run %s was cancelled", run_id)
+        await write_status(ctx["redis"], run_id, status="failed", error="Job cancelled before completion")
+        raise
     except Exception as error:
         logger.exception("run %s failed", run_id)
         await write_status(ctx["redis"], run_id, status="failed", error=str(error))
@@ -105,7 +110,7 @@ async def run_agent(ctx: dict[str, Any], run_id: str, message: str, thread_id: s
 async def resume_agent(ctx: dict[str, Any], run_id: str, thread_id: str, decision: str) -> dict[str, Any]:
     config = {"configurable": {"thread_id": thread_id}}
     try:
-        async with ctx["redis"].lock(f"thread-lock:{thread_id}", timeout=240, blocking_timeout=180):
+        async with ctx["redis"].lock(f"thread-lock:{thread_id}", timeout=300, blocking_timeout=180):
             paused = await ctx["graph"].aget_state(config)
             if paused.values.get("run_id") != run_id or not interrupt_payload(paused):
                 raise ValueError("Run does not own the paused thread checkpoint")
@@ -115,6 +120,10 @@ async def resume_agent(ctx: dict[str, Any], run_id: str, thread_id: str, decisio
             payload = state_payload(snapshot)
             await write_status(ctx["redis"], run_id, status="completed", **payload)
             return payload
+    except asyncio.CancelledError:
+        logger.warning("resume %s was cancelled", run_id)
+        await write_status(ctx["redis"], run_id, status="failed", error="Job cancelled before completion")
+        raise
     except Exception as error:
         logger.exception("resume %s failed", run_id)
         await write_status(ctx["redis"], run_id, status="failed", error=str(error))
@@ -126,5 +135,5 @@ class WorkerSettings:
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
-    job_timeout = 180
+    job_timeout = 500
     max_tries = 1

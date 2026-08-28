@@ -57,11 +57,13 @@ async def decide_run(run_id: str, payload: DecisionRequest, redis: Any = Depends
     run = await read_run(redis, run_id)
     if run["status"] != "awaiting_approval":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Run is not awaiting approval")
-    await redis.enqueue_job(
+    job = await redis.enqueue_job(
         "resume_agent",
         run_id,
         run["thread_id"],
         payload.decision,
         _job_id=f"{run_id}:decision",
     )
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A decision is already queued")
     return RunStatus.model_validate(await read_run(redis, run_id))
