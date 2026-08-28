@@ -15,6 +15,9 @@ from support_copilot.model import OpenRouterClient
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+JOB_TIMEOUT_SECONDS = 500
+THREAD_LOCK_TIMEOUT_SECONDS = JOB_TIMEOUT_SECONDS + 30
+THREAD_LOCK_BLOCKING_TIMEOUT_SECONDS = 180
 
 
 async def startup(ctx: dict[str, Any]) -> None:
@@ -63,7 +66,11 @@ def interrupt_payload(snapshot: Any) -> dict[str, Any]:
 async def run_agent(ctx: dict[str, Any], run_id: str, message: str, thread_id: str) -> dict[str, Any]:
     config = {"configurable": {"thread_id": thread_id}}
     try:
-        async with ctx["redis"].lock(f"thread-lock:{thread_id}", timeout=300, blocking_timeout=180):
+        async with ctx["redis"].lock(
+            f"thread-lock:{thread_id}",
+            timeout=THREAD_LOCK_TIMEOUT_SECONDS,
+            blocking_timeout=THREAD_LOCK_BLOCKING_TIMEOUT_SECONDS,
+        ):
             previous = await ctx["graph"].aget_state(config)
             if interrupt_payload(previous):
                 raise ValueError("Thread already has a run awaiting approval")
@@ -110,7 +117,11 @@ async def run_agent(ctx: dict[str, Any], run_id: str, message: str, thread_id: s
 async def resume_agent(ctx: dict[str, Any], run_id: str, thread_id: str, decision: str) -> dict[str, Any]:
     config = {"configurable": {"thread_id": thread_id}}
     try:
-        async with ctx["redis"].lock(f"thread-lock:{thread_id}", timeout=300, blocking_timeout=180):
+        async with ctx["redis"].lock(
+            f"thread-lock:{thread_id}",
+            timeout=THREAD_LOCK_TIMEOUT_SECONDS,
+            blocking_timeout=THREAD_LOCK_BLOCKING_TIMEOUT_SECONDS,
+        ):
             paused = await ctx["graph"].aget_state(config)
             if paused.values.get("run_id") != run_id or not interrupt_payload(paused):
                 raise ValueError("Run does not own the paused thread checkpoint")
@@ -135,5 +146,5 @@ class WorkerSettings:
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
-    job_timeout = 500
+    job_timeout = JOB_TIMEOUT_SECONDS
     max_tries = 1

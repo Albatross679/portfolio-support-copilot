@@ -9,7 +9,7 @@ from fastapi import HTTPException
 
 from support_copilot.api import decide_run
 from support_copilot.schemas import DecisionRequest
-from support_copilot.worker import run_agent
+from support_copilot.worker import THREAD_LOCK_TIMEOUT_SECONDS, WorkerSettings, run_agent
 
 
 class FakeRedis:
@@ -34,6 +34,10 @@ class FakeRedis:
     @asynccontextmanager
     async def lock(self, *args: Any, **kwargs: Any):
         yield
+
+
+def test_thread_lock_outlives_worker_job_timeout() -> None:
+    assert THREAD_LOCK_TIMEOUT_SECONDS > WorkerSettings.job_timeout
 
 
 @pytest.mark.asyncio
