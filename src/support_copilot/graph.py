@@ -68,7 +68,10 @@ def build_nodes(deps: GraphDependencies) -> dict[str, Any]:
         vector = (await deps.model.embed([state["message"]]))[0]
         documents = await deps.repository.retrieve(vector)
         context = "\n\n".join(f"[{doc['document_name']}] {doc['content']}" for doc in documents)
-        return {"tool_context": context or "No help document was retrieved.", "sources": [doc["document_name"] for doc in documents]}
+        return {
+            "tool_context": context or "No help document was retrieved.",
+            "sources": [doc["document_name"] for doc in documents],
+        }
 
     async def sql(state: SupportState) -> dict[str, Any]:
         plan = await deps.model.structured(
@@ -89,14 +92,18 @@ def build_nodes(deps: GraphDependencies) -> dict[str, Any]:
         if state["extraction"] is None:
             raise ValueError("Extraction is missing")
         extraction = Extraction.model_validate(state["extraction"])
-        proposal = await deps.repository.refund_proposal(extraction.order_number, extraction.issue_type)
+        proposal = await deps.repository.refund_proposal(
+            extraction.order_number, extraction.issue_type
+        )
         decision = interrupt({"proposed_refund": proposal.model_dump()})
         approved = decision == "approve"
         await deps.repository.record_simulated_refund(proposal, approved)
         return {
             "proposed_refund": proposal.model_dump(),
             "decision": "approve" if approved else "reject",
-            "tool_context": "The simulated refund was approved." if approved else "The simulated refund was rejected.",
+            "tool_context": "The simulated refund was approved."
+            if approved
+            else "The simulated refund was rejected.",
             "sources": ["fake business data"],
         }
 
@@ -113,7 +120,14 @@ def build_nodes(deps: GraphDependencies) -> dict[str, Any]:
         )
         return {"answer": response}
 
-    return {"extract": extract, "route": route, "rag": rag, "sql": sql, "refund": refund, "respond": respond}
+    return {
+        "extract": extract,
+        "route": route,
+        "rag": rag,
+        "sql": sql,
+        "refund": refund,
+        "respond": respond,
+    }
 
 
 def choose_handler(state: SupportState) -> Literal["rag", "sql", "refund"]:
@@ -123,14 +137,18 @@ def choose_handler(state: SupportState) -> Literal["rag", "sql", "refund"]:
     return handler
 
 
-def build_graph(deps: GraphDependencies, checkpointer: BaseCheckpointSaver[Any] | None = None) -> Any:
+def build_graph(
+    deps: GraphDependencies, checkpointer: BaseCheckpointSaver[Any] | None = None
+) -> Any:
     nodes = build_nodes(deps)
     builder = StateGraph(SupportState)
     for name, node in nodes.items():
         builder.add_node(name, node)
     builder.add_edge(START, "extract")
     builder.add_edge("extract", "route")
-    builder.add_conditional_edges("route", choose_handler, {"rag": "rag", "sql": "sql", "refund": "refund"})
+    builder.add_conditional_edges(
+        "route", choose_handler, {"rag": "rag", "sql": "sql", "refund": "refund"}
+    )
     for handler in ("rag", "sql", "refund"):
         builder.add_edge(handler, "respond")
     builder.add_edge("respond", END)

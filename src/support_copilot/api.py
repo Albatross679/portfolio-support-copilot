@@ -42,7 +42,9 @@ async def health() -> dict[str, str]:
 async def create_run(payload: RunRequest, redis: Any = Depends(redis_client)) -> RunCreated:
     run_id = str(uuid.uuid4())
     thread_id = payload.thread_id or str(uuid.uuid4())
-    await redis.set(f"run:{run_id}", json.dumps({"run_id": run_id, "thread_id": thread_id, "status": "queued"}))
+    await redis.set(
+        f"run:{run_id}", json.dumps({"run_id": run_id, "thread_id": thread_id, "status": "queued"})
+    )
     await redis.enqueue_job("run_agent", run_id, payload.message, thread_id, _job_id=run_id)
     return RunCreated(run_id=run_id, thread_id=thread_id)
 
@@ -53,10 +55,14 @@ async def get_run(run_id: str, redis: Any = Depends(redis_client)) -> RunStatus:
 
 
 @app.post("/runs/{run_id}/decision", response_model=RunStatus, status_code=status.HTTP_202_ACCEPTED)
-async def decide_run(run_id: str, payload: DecisionRequest, redis: Any = Depends(redis_client)) -> RunStatus:
+async def decide_run(
+    run_id: str, payload: DecisionRequest, redis: Any = Depends(redis_client)
+) -> RunStatus:
     run = await read_run(redis, run_id)
     if run["status"] != "awaiting_approval":
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Run is not awaiting approval")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Run is not awaiting approval"
+        )
     job = await redis.enqueue_job(
         "resume_agent",
         run_id,
@@ -65,5 +71,7 @@ async def decide_run(run_id: str, payload: DecisionRequest, redis: Any = Depends
         _job_id=f"{run_id}:decision",
     )
     if job is None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A decision is already queued")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="A decision is already queued"
+        )
     return RunStatus.model_validate(await read_run(redis, run_id))

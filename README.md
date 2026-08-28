@@ -27,7 +27,7 @@ FastAPI accepts and reports runs only. The arq worker owns graph execution, whil
 ## Run locally
 
 1. Copy `.env.example` to `.env` and set `OPENROUTER_API_KEY`. The key is required for model calls and help-document ingestion.
-2. Run `docker compose up --build`. Set `API_PORT=8001` first if port 8000 is already in use.
+2. Run `docker compose up --build`. If port 8000 is already in use, run `API_PORT=8001 docker compose up --build` and use port 8001 in the URLs below.
 3. Open `http://localhost:8000/docs` or submit a request with `curl -X POST http://localhost:8000/runs -H 'content-type: application/json' -d '{"message":"My damaged 4K order ORD-1001 needs a refund."}'`.
 4. Poll `GET /runs/<run_id>`. When it is `awaiting_approval`, post `{"decision":"approve"}` to `/runs/<run_id>/decision`.
 

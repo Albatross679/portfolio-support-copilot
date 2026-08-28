@@ -13,7 +13,9 @@ async def test_submit_poll_pause_approve_and_finish() -> None:
         pytest.skip("requires the Compose stack and OPENROUTER_API_KEY")
     base_url = os.getenv("INTEGRATION_BASE_URL", "http://localhost:8000")
     async with httpx.AsyncClient(base_url=base_url, timeout=20) as client:
-        created = await client.post("/runs", json={"message": "My damaged 4K UHD order ORD-1001 needs a refund."})
+        created = await client.post(
+            "/runs", json={"message": "My damaged 4K UHD order ORD-1001 needs a refund."}
+        )
         created.raise_for_status()
         run_id = created.json()["run_id"]
         paused = await poll(client, run_id, {"awaiting_approval", "failed"})
@@ -24,6 +26,23 @@ async def test_submit_poll_pause_approve_and_finish() -> None:
         completed = await poll(client, run_id, {"completed", "failed"})
         assert completed["status"] == "completed", completed
         assert completed["answer"]
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_policy_question_uses_the_seeded_help_documents() -> None:
+    if os.getenv("RUN_INTEGRATION") != "1" or not os.getenv("OPENROUTER_API_KEY"):
+        pytest.skip("requires the Compose stack and OPENROUTER_API_KEY")
+    base_url = os.getenv("INTEGRATION_BASE_URL", "http://localhost:8000")
+    async with httpx.AsyncClient(base_url=base_url, timeout=20) as client:
+        created = await client.post(
+            "/runs", json={"message": "What is the return window for an unopened Blu-ray?"}
+        )
+        created.raise_for_status()
+        completed = await poll(client, created.json()["run_id"], {"completed", "failed"})
+        assert completed["status"] == "completed", completed
+        assert completed["route"]["handler"] == "rag"
+        assert "30" in completed["answer"]
 
 
 async def poll(client: httpx.AsyncClient, run_id: str, terminal: set[str]) -> dict:

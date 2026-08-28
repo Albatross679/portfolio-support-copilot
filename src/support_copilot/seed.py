@@ -5,7 +5,11 @@ from psycopg import AsyncConnection
 
 async def seed_business_data(conn: AsyncConnection) -> None:
     await conn.execute("TRUNCATE orders, products, customers RESTART IDENTITY CASCADE")
-    customers = [("maya@example.test", "Maya Chen"), ("sam@example.test", "Sam Rivera"), ("lee@example.test", "Lee Patel")]
+    customers = [
+        ("maya@example.test", "Maya Chen"),
+        ("sam@example.test", "Sam Rivera"),
+        ("lee@example.test", "Lee Patel"),
+    ]
     async with conn.cursor() as cur:
         await cur.executemany("INSERT INTO customers (email, name) VALUES (%s, %s)", customers)
     products = [
@@ -17,7 +21,8 @@ async def seed_business_data(conn: AsyncConnection) -> None:
     ]
     async with conn.cursor() as cur:
         await cur.executemany(
-            "INSERT INTO products (title, format, sku, price_cents) VALUES (%s, %s, %s, %s)", products
+            "INSERT INTO products (title, format, sku, price_cents) VALUES (%s, %s, %s, %s)",
+            products,
         )
     now = datetime.now(UTC)
     orders = [

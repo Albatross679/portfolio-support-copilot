@@ -33,7 +33,10 @@ async def evaluate() -> dict[str, float]:
             route_correct += route.lane == row["lane"] and route.handler == row["handler"]
     finally:
         await model.close()
-    result = {"extract_accuracy": extract_correct / len(rows), "route_accuracy": route_correct / len(rows)}
+    result = {
+        "extract_accuracy": extract_correct / len(rows),
+        "route_accuracy": route_correct / len(rows),
+    }
     print(json.dumps(result, indent=2))
     return result
 

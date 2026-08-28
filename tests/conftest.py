@@ -5,7 +5,9 @@ from support_copilot.schemas import Extraction, RefundProposal, RouteDecision, S
 
 
 class FakeModel:
-    def __init__(self, responses: dict[type[Any], Any], answer: str = "Grounded support reply") -> None:
+    def __init__(
+        self, responses: dict[type[Any], Any], answer: str = "Grounded support reply"
+    ) -> None:
         self.responses = responses
         self.answer = answer
         self.calls: list[type[Any]] = []
@@ -34,7 +36,9 @@ class FakeRepository:
         return [{"copies_sold": 3}]
 
     async def refund_proposal(self, order_number: str | None, reason: str) -> RefundProposal:
-        return RefundProposal(order_number=order_number or "unknown", amount_cents=2999, reason=reason)
+        return RefundProposal(
+            order_number=order_number or "unknown", amount_cents=2999, reason=reason
+        )
 
     async def record_simulated_refund(self, proposal: RefundProposal, approved: bool) -> None:
         self.refunds.append((proposal, approved))
@@ -55,7 +59,15 @@ class FakeCache:
 
 def defaults(handler: str = "rag") -> dict[type[Any], Any]:
     return {
-        Extraction: Extraction(order_number="ORD-1001", product_title="The Last Horizon", media_format="4K UHD", issue_type="returns", sentiment="neutral"),
+        Extraction: Extraction(
+            order_number="ORD-1001",
+            product_title="The Last Horizon",
+            media_format="4K UHD",
+            issue_type="returns",
+            sentiment="neutral",
+        ),
         RouteDecision: RouteDecision(lane="returns", handler=handler, rationale="test route"),
-        SqlPlan: SqlPlan(sql="SELECT COUNT(*) AS copies_sold FROM orders", explanation="count orders"),
+        SqlPlan: SqlPlan(
+            sql="SELECT COUNT(*) AS copies_sold FROM orders", explanation="count orders"
+        ),
     }

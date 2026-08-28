@@ -7,7 +7,16 @@ from psycopg_pool import AsyncConnectionPool
 from support_copilot.db import vector_literal
 from support_copilot.model import OpenRouterClient
 
-HELP_DIR = Path(__file__).resolve().parents[2] / "docs" / "help"
+
+def find_help_directory() -> Path:
+    candidates = [
+        Path.cwd() / "docs" / "help",
+        Path(__file__).resolve().parents[2] / "docs" / "help",
+    ]
+    for candidate in candidates:
+        if any(candidate.glob("*.md")):
+            return candidate
+    raise FileNotFoundError("No help documents were found in docs/help")
 
 
 def chunk_text(text: str, chunk_size: int = 700, overlap: int = 100) -> list[str]:
@@ -25,10 +34,14 @@ def chunk_text(text: str, chunk_size: int = 700, overlap: int = 100) -> list[str
     return chunks
 
 
-async def ingest_help_documents(pool: AsyncConnectionPool, model: OpenRouterClient, embedding_dim: int) -> int:
-    rows = [(path.name, index, chunk) for path in sorted(HELP_DIR.glob("*.md")) for index, chunk in enumerate(chunk_text(path.read_text()))]
-    if not rows:
-        return 0
+async def ingest_help_documents(
+    pool: AsyncConnectionPool, model: OpenRouterClient, embedding_dim: int
+) -> int:
+    rows = [
+        (path.name, index, chunk)
+        for path in sorted(find_help_directory().glob("*.md"))
+        for index, chunk in enumerate(chunk_text(path.read_text()))
+    ]
     embeddings = await model.embed([row[2] for row in rows])
     if len(embeddings) != len(rows):
         raise ValueError("Embedding provider returned an unexpected number of vectors")

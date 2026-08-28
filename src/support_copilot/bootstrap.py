@@ -16,7 +16,9 @@ logger = logging.getLogger(__name__)
 
 async def bootstrap() -> None:
     settings = get_settings()
-    pool = AsyncConnectionPool(settings.database_url, min_size=1, max_size=4, open=False, kwargs={"autocommit": True})
+    pool = AsyncConnectionPool(
+        settings.database_url, min_size=1, max_size=4, open=False, kwargs={"autocommit": True}
+    )
     await pool.open()
     try:
         async with pool.connection() as conn:

@@ -8,7 +8,9 @@ import pytest
 from fastapi import HTTPException
 
 from support_copilot.api import decide_run
-from support_copilot.schemas import DecisionRequest
+from support_copilot.ingest import find_help_directory
+from support_copilot.model import strict_json_schema
+from support_copilot.schemas import DecisionRequest, Extraction
 from support_copilot.worker import THREAD_LOCK_TIMEOUT_SECONDS, WorkerSettings, run_agent
 
 
@@ -34,6 +36,27 @@ class FakeRedis:
     @asynccontextmanager
     async def lock(self, *args: Any, **kwargs: Any):
         yield
+
+
+def test_openrouter_strict_schema_requires_every_property() -> None:
+    schema = strict_json_schema(Extraction)
+
+    assert schema["required"] == list(schema["properties"])
+    assert schema["additionalProperties"] is False
+    assert all(
+        "default" not in property_schema for property_schema in schema["properties"].values()
+    )
+
+
+def test_help_documents_are_found_from_the_process_working_directory(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    help_directory = tmp_path / "docs" / "help"
+    help_directory.mkdir(parents=True)
+    (help_directory / "returns.md").write_text("Return policy")
+    monkeypatch.chdir(tmp_path)
+
+    assert find_help_directory() == help_directory
 
 
 def test_thread_lock_outlives_worker_job_timeout() -> None:

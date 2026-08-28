@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Any
 
 from psycopg import AsyncConnection
-from psycopg import sql as psycopg_sql
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 from sqlglot import exp, parse
@@ -63,7 +62,9 @@ class StoreRepository:
 
     async def refund_proposal(self, order_number: str | None, reason: str) -> RefundProposal:
         if not order_number:
-            return RefundProposal(order_number="unknown", amount_cents=0, reason=f"{reason}; order number required")
+            return RefundProposal(
+                order_number="unknown", amount_cents=0, reason=f"{reason}; order number required"
+            )
         async with self.pool.connection() as conn:
             async with conn.cursor(row_factory=dict_row) as cur:
                 await cur.execute(
@@ -76,8 +77,12 @@ class StoreRepository:
                 )
                 row = await cur.fetchone()
         if row is None:
-            return RefundProposal(order_number=order_number, amount_cents=0, reason=f"{reason}; order not found")
-        return RefundProposal(order_number=row["order_number"], amount_cents=row["amount_cents"], reason=reason)
+            return RefundProposal(
+                order_number=order_number, amount_cents=0, reason=f"{reason}; order not found"
+            )
+        return RefundProposal(
+            order_number=row["order_number"], amount_cents=row["amount_cents"], reason=reason
+        )
 
     async def record_simulated_refund(self, proposal: RefundProposal, approved: bool) -> None:
         if proposal.order_number == "unknown":
@@ -109,7 +114,9 @@ def validate_readonly_sql(sql: str) -> None:
         for source in scope.sources.values()
         if isinstance(source, exp.Table)
     ]
-    if not tables or any(table.catalog or table.db or table.name.lower() not in ALLOWED_TABLES for table in tables):
+    if not tables or any(
+        table.catalog or table.db or table.name.lower() not in ALLOWED_TABLES for table in tables
+    ):
         raise ValueError("Query must reference only business tables")
     if any(isinstance(dot.expression, exp.Func) for dot in statement.find_all(exp.Dot)):
         raise ValueError("Schema-qualified functions are not permitted")
@@ -122,7 +129,9 @@ def called_function_names(statement: exp.Query) -> set[str]:
     names: set[str] = set()
     for function in statement.find_all(exp.Func):
         name = function_name(function)
-        if isinstance(function, exp.CurrentDate) or function.sql().lower().lstrip().startswith(f"{name}("):
+        if isinstance(function, exp.CurrentDate) or function.sql().lower().lstrip().startswith(
+            f"{name}("
+        ):
             names.add(name)
     return names
 
@@ -137,14 +146,7 @@ async def apply_schema(conn: AsyncConnection[Any], embedding_dim: int) -> None:
     schema_path = Path(__file__).with_name("schema.sql")
     schema = schema_path.read_text().replace("{{EMBEDDING_DIM}}", str(embedding_dim))
     await conn.execute(schema)
-    if embedding_dim <= 2000:
-        await conn.execute(
-            psycopg_sql.SQL(
-                "CREATE INDEX IF NOT EXISTS help_document_embeddings_embedding_idx "
-                "ON help_document_embeddings USING ivfflat "
-                "(embedding vector_cosine_ops) WITH (lists = 10)"
-            )
-        )
+    await conn.execute("DROP INDEX IF EXISTS help_document_embeddings_embedding_idx")
     await conn.commit()
 
 

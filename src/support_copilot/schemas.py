@@ -5,10 +5,20 @@ from pydantic import BaseModel, Field
 
 class Extraction(BaseModel):
     order_number: str | None = Field(default=None, description="Store order number, if present")
-    product_title: str | None = Field(default=None, description="Movie title or box set name, if present")
+    product_title: str | None = Field(
+        default=None, description="Movie title or box set name, if present"
+    )
     media_format: Literal["Blu-ray", "DVD", "4K UHD", "box set", "unknown"] = "unknown"
     issue_type: Literal[
-        "billing", "shipping", "returns", "refund", "damaged_disc", "region_code", "preorder", "sales_query", "general"
+        "billing",
+        "shipping",
+        "returns",
+        "refund",
+        "damaged_disc",
+        "region_code",
+        "preorder",
+        "sales_query",
+        "general",
     ] = "general"
     sentiment: Literal["positive", "neutral", "frustrated", "angry"] = "neutral"
 
@@ -20,7 +30,9 @@ class RouteDecision(BaseModel):
 
 
 class SqlPlan(BaseModel):
-    sql: str = Field(description="One read-only PostgreSQL SELECT query against customers, products, or orders")
+    sql: str = Field(
+        description="One read-only PostgreSQL SELECT query against customers, products, or orders"
+    )
     explanation: str
 
 

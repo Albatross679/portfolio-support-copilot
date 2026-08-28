@@ -1,5 +1,5 @@
 import json
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import httpx
 from pydantic import BaseModel
@@ -7,6 +7,26 @@ from pydantic import BaseModel
 from support_copilot.config import Settings
 
 SchemaT = TypeVar("SchemaT", bound=BaseModel)
+
+
+def strict_json_schema(schema: type[BaseModel]) -> dict[str, Any]:
+    """Return the JSON Schema shape required by OpenRouter's strict providers."""
+    result = schema.model_json_schema()
+
+    def require_all_properties(value: Any) -> None:
+        if isinstance(value, dict):
+            value.pop("default", None)
+            if "properties" in value:
+                value["required"] = list(value["properties"])
+                value["additionalProperties"] = False
+            for child in value.values():
+                require_all_properties(child)
+        elif isinstance(value, list):
+            for child in value:
+                require_all_properties(child)
+
+    require_all_properties(result)
+    return result
 
 
 class OpenRouterClient:
@@ -37,7 +57,11 @@ class OpenRouterClient:
             "temperature": 0,
             "response_format": {
                 "type": "json_schema",
-                "json_schema": {"name": schema.__name__.lower(), "strict": True, "schema": schema.model_json_schema()},
+                "json_schema": {
+                    "name": schema.__name__.lower(),
+                    "strict": True,
+                    "schema": strict_json_schema(schema),
+                },
             },
         }
         response = await self._client.post(

@@ -21,12 +21,19 @@ THREAD_LOCK_BLOCKING_TIMEOUT_SECONDS = 180
 
 
 async def startup(ctx: dict[str, Any]) -> None:
-    pool = AsyncConnectionPool(settings.database_url, min_size=2, max_size=10, open=False, kwargs={"autocommit": True})
+    pool = AsyncConnectionPool(
+        settings.database_url, min_size=2, max_size=10, open=False, kwargs={"autocommit": True}
+    )
     await pool.open()
     redis = await create_pool(RedisSettings.from_dsn(settings.redis_url))
     model = OpenRouterClient(settings)
     saver = AsyncPostgresSaver(pool)
-    ctx.update(pool=pool, redis=redis, model=model, graph=build_graph(GraphDependencies(model, StoreRepository(pool), redis), saver))
+    ctx.update(
+        pool=pool,
+        redis=redis,
+        model=model,
+        graph=build_graph(GraphDependencies(model, StoreRepository(pool), redis), saver),
+    )
 
 
 async def shutdown(ctx: dict[str, Any]) -> None:
@@ -38,7 +45,11 @@ async def shutdown(ctx: dict[str, Any]) -> None:
 async def write_status(redis: Any, run_id: str, **update: Any) -> None:
     key = f"run:{run_id}"
     existing = await redis.get(key)
-    data = json.loads(existing.decode() if isinstance(existing, bytes) else existing) if existing else {"run_id": run_id}
+    data = (
+        json.loads(existing.decode() if isinstance(existing, bytes) else existing)
+        if existing
+        else {"run_id": run_id}
+    )
     data.update(update)
     await redis.set(key, json.dumps(data, default=str))
 
@@ -63,7 +74,9 @@ def interrupt_payload(snapshot: Any) -> dict[str, Any]:
     return {}
 
 
-async def run_agent(ctx: dict[str, Any], run_id: str, message: str, thread_id: str) -> dict[str, Any]:
+async def run_agent(
+    ctx: dict[str, Any], run_id: str, message: str, thread_id: str
+) -> dict[str, Any]:
     config = {"configurable": {"thread_id": thread_id}}
     try:
         async with ctx["redis"].lock(
@@ -106,7 +119,9 @@ async def run_agent(ctx: dict[str, Any], run_id: str, message: str, thread_id: s
             return payload
     except asyncio.CancelledError:
         logger.warning("run %s was cancelled", run_id)
-        await write_status(ctx["redis"], run_id, status="failed", error="Job cancelled before completion")
+        await write_status(
+            ctx["redis"], run_id, status="failed", error="Job cancelled before completion"
+        )
         raise
     except Exception as error:
         logger.exception("run %s failed", run_id)
@@ -114,7 +129,9 @@ async def run_agent(ctx: dict[str, Any], run_id: str, message: str, thread_id: s
         raise
 
 
-async def resume_agent(ctx: dict[str, Any], run_id: str, thread_id: str, decision: str) -> dict[str, Any]:
+async def resume_agent(
+    ctx: dict[str, Any], run_id: str, thread_id: str, decision: str
+) -> dict[str, Any]:
     config = {"configurable": {"thread_id": thread_id}}
     try:
         async with ctx["redis"].lock(
@@ -133,7 +150,9 @@ async def resume_agent(ctx: dict[str, Any], run_id: str, thread_id: str, decisio
             return payload
     except asyncio.CancelledError:
         logger.warning("resume %s was cancelled", run_id)
-        await write_status(ctx["redis"], run_id, status="failed", error="Job cancelled before completion")
+        await write_status(
+            ctx["redis"], run_id, status="failed", error="Job cancelled before completion"
+        )
         raise
     except Exception as error:
         logger.exception("resume %s failed", run_id)
