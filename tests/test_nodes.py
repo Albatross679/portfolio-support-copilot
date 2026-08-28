@@ -76,3 +76,8 @@ def test_sql_schema_rejects_writes() -> None:
     validate_readonly_sql("SELECT title, format FROM products")
     validate_readonly_sql("SELECT COUNT(*) FROM orders")
     validate_readonly_sql("WITH recent AS (SELECT * FROM orders) SELECT COUNT(*) FROM recent")
+    validate_readonly_sql(
+        "SELECT COUNT(*) FROM orders "
+        "WHERE ordered_at >= date_trunc('month', current_date) - INTERVAL '1 month' "
+        "AND ordered_at < date_trunc('month', current_date)"
+    )

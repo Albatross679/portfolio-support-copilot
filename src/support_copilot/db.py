@@ -18,6 +18,7 @@ ALLOWED_FUNCTIONS = {
     "avg",
     "coalesce",
     "count",
+    "current_date",
     "date_trunc",
     "extract",
     "lower",
@@ -112,9 +113,18 @@ def validate_readonly_sql(sql: str) -> None:
         raise ValueError("Query must reference only business tables")
     if any(isinstance(dot.expression, exp.Func) for dot in statement.find_all(exp.Dot)):
         raise ValueError("Schema-qualified functions are not permitted")
-    functions = {function_name(function) for function in statement.find_all(exp.Func)}
+    functions = called_function_names(statement)
     if not functions.issubset(ALLOWED_FUNCTIONS):
         raise ValueError("Query contains a function that is not permitted")
+
+
+def called_function_names(statement: exp.Query) -> set[str]:
+    names: set[str] = set()
+    for function in statement.find_all(exp.Func):
+        name = function_name(function)
+        if isinstance(function, exp.CurrentDate) or function.sql().lower().lstrip().startswith(f"{name}("):
+            names.add(name)
+    return names
 
 
 def function_name(function: exp.Func) -> str:
