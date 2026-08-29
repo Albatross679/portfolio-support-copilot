@@ -1,6 +1,6 @@
 import type { CreateRunRequest, CreateRunResponse, DecisionRequest, DecisionResponse, RunListResponse, RunStatus, SupportApi, SupportRun } from "./types";
 
-const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
+const API_BASE = (import.meta.env.VITE_API_BASE ?? (import.meta.env.DEV ? "/api" : "")).replace(/\/$/, "");
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {

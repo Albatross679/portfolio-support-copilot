@@ -16,7 +16,7 @@ POST /runs/{id}/decision -> Redis/arq queue -> worker -> Command(resume=approve|
                               Postgres + pgvector <- checkpointer, business tables, help-doc embeddings
 ```
 
-FastAPI accepts and reports runs only. The arq worker owns graph execution, while Redis holds the queue, run status, and cached SQL tool results. A shared async OpenRouter client supplies structured JSON output and embeddings. Postgres stores fake customers, products, orders, pgvector help-document chunks, and LangGraph's durable checkpoint state keyed by `thread_id`.
+FastAPI serves the built console and accepts and reports runs. The arq worker owns graph execution, while Redis holds the queue, run status, and cached SQL tool results. A shared async OpenRouter client supplies structured JSON output and embeddings. Postgres stores fake customers, products, orders, pgvector help-document chunks, and LangGraph's durable checkpoint state keyed by `thread_id`.
 
 ## API contract
 
@@ -32,7 +32,7 @@ FastAPI accepts and reports runs only. The arq worker owns graph execution, whil
 3. Open `http://localhost:8000` for the built React console and submit a support message. The API documentation remains at `http://localhost:8000/docs`; direct API submissions also work with `curl -X POST http://localhost:8000/runs -H 'content-type: application/json' -d '{"message":"My damaged 4K order ORD-1001 needs a refund."}'`.
 4. Poll `GET /runs/<run_id>`. When it is `awaiting_approval`, approve or reject it from the console's Approval inbox, or post `{"decision":"approve"}` to `/runs/<run_id>/decision`.
 
-For console development, run `cd web && npm install && npm run dev`. Leave `VITE_API_BASE` blank to use the Vite proxy to `http://localhost:8000`, or set `VITE_API_BASE=http://localhost:8000 npm run dev`; the API permits local Vite origins. Use `VITE_API_BASE=http://localhost:8001` when the Compose fallback port is in use.
+For console development, run `cd web && npm install && npm run dev`. Leave `VITE_API_BASE` blank to send `/api` requests through the Vite proxy to `http://localhost:8000`, or set `VITE_API_BASE=http://localhost:8000 npm run dev`; the API permits local Vite origins. Use `VITE_API_BASE=http://localhost:8001` when the Compose fallback port is in use.
 
 The `init` Compose service applies the schema, seeds fake business data, creates LangGraph checkpoint tables, and embeds all documents in `docs/help/`. It exits successfully without a key so the API and worker can still boot, but RAG runs require embeddings and therefore an OpenRouter key. Re-ingest documents after changes with `docker compose run --rm init python scripts/ingest_help.py`.
 

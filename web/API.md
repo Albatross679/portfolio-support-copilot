@@ -1,6 +1,6 @@
 # API contract
 
-The Compose console and API share one origin. In Vite development, leave `VITE_API_BASE` blank to use the development proxy, or set it to a local API origin such as `http://localhost:8000`; the API permits local Vite origins.
+The Compose console and API share one origin. In Vite development, leave `VITE_API_BASE` blank to send `/api` requests through the development proxy, or set it to a local API origin such as `http://localhost:8000`; the API permits local Vite origins.
 
 ## Create a run
 
@@ -8,7 +8,7 @@ The Compose console and API share one origin. In Vite development, leave `VITE_A
 
 ## Read a run
 
-`GET /runs/{run_id}` returns a run object with `run_id`, `thread_id`, and `status`, plus `extraction`, `route`, `answer`, and `proposed_refund` once available. `status` is one of `queued`, `running`, `awaiting_approval`, `completed`, or `failed`. `extraction` contains `order_number`, `product_title`, `media_format`, `issue_type`, and `sentiment`, each as a string or null. `route` is `{ "lane", "handler", "rationale" }`; the handler is `rag`, `sql`, or `refund`. An `awaiting_approval` run includes `proposed_refund` with `order_number`, integer `amount_cents`, ISO `currency`, and `reason`.
+`GET /runs/{run_id}` returns a run object with `run_id`, `thread_id`, and `status`, plus `extraction`, `route`, `answer`, and `proposed_refund` once available. `status` is one of `queued`, `running`, `awaiting_approval`, `completed`, or `failed`. `extraction` contains nullable `order_number` and `product_title` fields. It also contains enum-valued `media_format`, `issue_type`, and `sentiment` fields. `route` is `{ "lane", "handler", "rationale" }`; the handler is `rag`, `sql`, or `refund`. An `awaiting_approval` run includes `proposed_refund` with `order_number`, integer `amount_cents`, ISO `currency`, and `reason`.
 
 ## List paused runs
 

@@ -14,7 +14,7 @@ npm install
 npm run dev
 ```
 
-Leave `VITE_API_BASE` blank to use the Vite proxy to `http://localhost:8000`. You can instead set `VITE_API_BASE=http://localhost:8000 npm run dev`; FastAPI permits local Vite origins. Use port 8001 for the documented Compose fallback.
+Leave `VITE_API_BASE` blank to send `/api` requests through the Vite proxy to `http://localhost:8000`. You can instead set `VITE_API_BASE=http://localhost:8000 npm run dev`; FastAPI permits local Vite origins. Use port 8001 for the documented Compose fallback.
 
 ## Mock mode
 
