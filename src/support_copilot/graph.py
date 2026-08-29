@@ -1,6 +1,7 @@
 import hashlib
 import json
-from typing import Any, Literal, Protocol, TypedDict
+from operator import add
+from typing import Annotated, Any, Literal, Protocol, TypedDict
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
@@ -35,6 +36,7 @@ class SupportState(TypedDict, total=False):
     proposed_refund: dict[str, Any] | None
     decision: Literal["approve", "reject"] | None
     answer: str | None
+    conversation_history: Annotated[list[dict[str, str]], add]
 
 
 class GraphDependencies:
@@ -108,17 +110,22 @@ def build_nodes(deps: GraphDependencies) -> dict[str, Any]:
         }
 
     async def respond(state: SupportState) -> dict[str, Any]:
+        history = state.get("conversation_history", [])[-6:]
+        prior_context = "\n".join(
+            f"{entry['role'].title()}: {entry['content']}" for entry in history[:-1]
+        ) or "No prior messages in this thread."
         response = await deps.model.generate(
-            "Answer as a concise store support copilot. Use only the supplied evidence. If a refund was rejected, say so plainly. Never claim a real payment was issued.",
+            "Answer as a concise store support copilot. Use only the supplied evidence and prior thread context. If a refund was rejected, say so plainly. Never claim a real payment was issued.",
             "\n".join(
                 [
+                    f"Prior thread context:\n{prior_context}",
                     f"Customer message: {state['message']}",
                     f"Route: {state['routing']}",
                     f"Evidence: {state.get('tool_context', '')}",
                 ]
             ),
         )
-        return {"answer": response}
+        return {"answer": response, "conversation_history": [{"role": "assistant", "content": response}]}
 
     return {
         "extract": extract,

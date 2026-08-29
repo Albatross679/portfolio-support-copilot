@@ -99,6 +99,7 @@ async def run_agent(
                 "proposed_refund": None,
                 "decision": None,
                 "answer": None,
+                "conversation_history": [{"role": "user", "content": message}],
             }
             await ctx["graph"].ainvoke(initial_state, config=config)
             snapshot = await ctx["graph"].aget_state(config)

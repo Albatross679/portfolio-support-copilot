@@ -57,12 +57,19 @@ class DecisionRequest(BaseModel):
     decision: Literal["approve", "reject"]
 
 
+type RunState = Literal["queued", "running", "awaiting_approval", "completed", "failed"]
+
+
 class RunStatus(BaseModel):
     run_id: str
     thread_id: str
-    status: Literal["queued", "running", "awaiting_approval", "completed", "failed"]
+    status: RunState
     extraction: Extraction | None = None
     route: RouteDecision | None = None
     proposed_refund: RefundProposal | None = None
     answer: str | None = None
     error: str | None = None
+
+
+class RunList(BaseModel):
+    runs: list[RunStatus]

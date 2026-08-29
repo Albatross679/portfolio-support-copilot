@@ -1,15 +1,27 @@
 import json
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from arq.connections import RedisSettings, create_pool
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from support_copilot.config import get_settings
-from support_copilot.schemas import DecisionRequest, RunCreated, RunRequest, RunStatus
+from support_copilot.schemas import (
+    DecisionRequest,
+    RunCreated,
+    RunList,
+    RunRequest,
+    RunState,
+    RunStatus,
+)
 
 settings = get_settings()
+CONSOLE_DIST = Path.cwd() / "web" / "dist"
 
 
 @asynccontextmanager
@@ -20,6 +32,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Portfolio Support Copilot", version="0.1.0", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
+)
 
 
 def redis_client(request: Request) -> Any:
@@ -49,8 +68,30 @@ async def create_run(payload: RunRequest, redis: Any = Depends(redis_client)) ->
     return RunCreated(run_id=run_id, thread_id=thread_id)
 
 
+@app.get("/runs", response_model=RunList)
+async def list_runs(
+    run_status: RunState | None = Query(default=None, alias="status"),
+    redis: Any = Depends(redis_client),
+) -> RunList:
+    runs: list[RunStatus] = []
+    async for key in redis.scan_iter(match="run:*"):
+        key_text = key.decode() if isinstance(key, bytes) else key
+        run = RunStatus.model_validate(await read_run(redis, key_text.removeprefix("run:")))
+        if run_status is None or run.status == run_status:
+            runs.append(run)
+    runs.sort(key=lambda run: run.run_id)
+    return RunList(runs=runs)
+
+
 @app.get("/runs/{run_id}", response_model=RunStatus)
-async def get_run(run_id: str, redis: Any = Depends(redis_client)) -> RunStatus:
+async def get_run(
+    run_id: str, request: Request, redis: Any = Depends(redis_client)
+) -> RunStatus | FileResponse:
+    if "text/html" in request.headers.get("accept", "") and CONSOLE_DIST.is_dir():
+        return FileResponse(
+            CONSOLE_DIST / "index.html",
+            headers={"Cache-Control": "no-store", "Vary": "Accept"},
+        )
     return RunStatus.model_validate(await read_run(redis, run_id))
 
 
@@ -75,3 +116,11 @@ async def decide_run(
             status_code=status.HTTP_409_CONFLICT, detail="A decision is already queued"
         )
     return RunStatus.model_validate(await read_run(redis, run_id))
+
+
+if CONSOLE_DIST.is_dir():
+    app.mount("/assets", StaticFiles(directory=CONSOLE_DIST / "assets"), name="console-assets")
+
+    @app.get("/{path:path}", include_in_schema=False)
+    async def console(path: str) -> FileResponse:
+        return FileResponse(CONSOLE_DIST / "index.html")

@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { createMockApi } from "../api";
 import type { SupportRun } from "../types";
@@ -8,7 +8,7 @@ it("shows the extraction, refund route, and approval proposal from the mock API"
   render(<RunView client={createMockApi()} runId="run_refund_2048" />);
 
   expect(await screen.findByText("The Seventh Seal")).toBeInTheDocument();
-  expect(screen.getByText("refund", { selector: ".route" })).toBeInTheDocument();
+  expect(screen.getByText("returns - refund", { selector: ".route" })).toBeInTheDocument();
   expect(screen.getByRole("region", { name: "Awaiting approval" })).toBeInTheDocument();
   expect(screen.getByText("$29.99")).toBeInTheDocument();
 });
@@ -19,11 +19,25 @@ it("shows the final answer for a completed mock run", async () => {
   expect(await screen.findByText(/expected to arrive on Thursday/)).toBeInTheDocument();
 });
 
+it("offers a follow-up only after the run completes", async () => {
+  const onFollowUp = vi.fn();
+  const { rerender } = render(<RunView client={createMockApi()} onFollowUp={onFollowUp} runId="run_refund_2048" />);
+
+  expect(await screen.findByText("You can send a follow-up after this run completes.")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Send a follow-up in this thread" })).not.toBeInTheDocument();
+
+  rerender(<RunView client={createMockApi()} onFollowUp={onFollowUp} runId="run_shipping_1082" />);
+  const followUp = await screen.findByRole("button", { name: "Send a follow-up in this thread" });
+  fireEvent.click(followUp);
+
+  expect(onFollowUp).toHaveBeenCalledWith("thread_shipping_1082");
+});
+
 it.each(["completed", "failed"] as const)("stops polling after a %s run loads", async (status) => {
   vi.useFakeTimers();
   try {
     const client = createMockApi();
-    const getRun = vi.spyOn(client, "getRun").mockResolvedValue({ run_id: "run_terminal", status });
+    const getRun = vi.spyOn(client, "getRun").mockResolvedValue({ run_id: "run_terminal", thread_id: "thread_terminal", status });
 
     render(<RunView client={client} runId="run_terminal" />);
     await act(async () => Promise.resolve());
@@ -46,7 +60,7 @@ it("ignores an earlier run request after navigation", async () => {
     const client = createMockApi();
     const getRun = vi.spyOn(client, "getRun").mockImplementation((runId) => runId === "run_earlier"
       ? earlierRequest
-      : Promise.resolve({ run_id: "run_current", status: "processing" }));
+      : Promise.resolve({ run_id: "run_current", thread_id: "thread_current", status: "running" }));
 
     const { rerender } = render(<RunView client={client} runId="run_earlier" />);
     await act(async () => Promise.resolve());
@@ -54,7 +68,7 @@ it("ignores an earlier run request after navigation", async () => {
     await act(async () => Promise.resolve());
     expect(screen.getByText("run_current")).toBeInTheDocument();
 
-    await act(async () => finishEarlierRequest({ run_id: "run_earlier", status: "completed" }));
+    await act(async () => finishEarlierRequest({ run_id: "run_earlier", thread_id: "thread_earlier", status: "completed" }));
     expect(screen.getByText("run_current")).toBeInTheDocument();
     expect(screen.queryByText("run_earlier")).not.toBeInTheDocument();
 
