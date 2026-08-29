@@ -26,8 +26,7 @@ All five are stages of one run, in order:
 1. Turn unlabeled text into structured data. A support message becomes fixed fields:
    order number, product title, format, issue type, sentiment. Done with the model's
    structured-output mode against a fixed schema.
-2. Customer-support routing. The structured message is classified into a lane:
-   billing, shipping, returns, or general.
+2. Customer-support routing. The structured message is classified as billing, shipping, returns, general, or refund.
 3. RAG question answering. For policy questions (returns, region codes, damaged discs,
    preorders) the answer is drawn from the store's help documents.
 4. SQL question answering. For data questions ("how many 4K copies of this title sold
@@ -139,7 +138,5 @@ It is a thin client over a strong backend, honest about that. No design-system p
 
 ## Reuse from existing work
 
-- The `python backend/agent-backend` scaffold already has the FastAPI service, the arq
-  worker, and the Docker Compose file to evolve from.
 - The `LangGraph` learning folder has the tool-calling agent to draw the graph patterns
   from.

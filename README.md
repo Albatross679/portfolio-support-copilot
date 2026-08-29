@@ -5,7 +5,7 @@ Portfolio Support Copilot is an async customer-support copilot for a physical-me
 ## Architecture
 
 ```text
-React console (separate task)
+React console
           |
           v
 POST /runs -> FastAPI -> Redis/arq queue -> worker -> LangGraph
@@ -55,3 +55,7 @@ The end-to-end test deliberately uses the Compose stack rather than testcontaine
 - Structured logging with request tracing and a metrics endpoint.
 - Live streaming with server-sent events for agent progress.
 - Any real payment integration. Refunds remain simulated against fake business data.
+
+## Frontend
+
+The React and TypeScript support console lives in [web/](web/). It can run against the API or its canned mock mode and is documented in [web/README.md](web/README.md).
