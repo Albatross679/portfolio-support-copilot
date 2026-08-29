@@ -1,0 +1,20 @@
+{"message":"Can I return an unopened DVD?","issue_type":"returns","lane":"returns","handler":"rag"}
+{"message":"What region player do I need for this Blu-ray?","issue_type":"region_code","lane":"general","handler":"rag"}
+{"message":"My disc arrived cracked, order ORD-1001.","issue_type":"damaged_disc","lane":"returns","handler":"rag"}
+{"message":"When will my preorder ship?","issue_type":"preorder","lane":"shipping","handler":"rag"}
+{"message":"Where is order ORD-1002?","issue_type":"shipping","lane":"shipping","handler":"rag"}
+{"message":"How long does economy shipping take?","issue_type":"shipping","lane":"shipping","handler":"rag"}
+{"message":"Please refund damaged order ORD-1001.","issue_type":"refund","lane":"returns","handler":"refund"}
+{"message":"I want my money back for ORD-1004.","issue_type":"refund","lane":"returns","handler":"refund"}
+{"message":"How many 4K UHD copies of The Last Horizon sold last month?","issue_type":"sales_query","lane":"general","handler":"sql"}
+{"message":"How many box sets did we sell this month?","issue_type":"sales_query","lane":"general","handler":"sql"}
+{"message":"Can I change the delivery address for ORD-1002?","issue_type":"shipping","lane":"shipping","handler":"rag"}
+{"message":"The collector box is missing a booklet.","issue_type":"damaged_disc","lane":"returns","handler":"rag"}
+{"message":"Does 4K UHD work in every region?","issue_type":"region_code","lane":"general","handler":"rag"}
+{"message":"Is DVD standard definition?","issue_type":"general","lane":"general","handler":"rag"}
+{"message":"I was charged twice for my order.","issue_type":"billing","lane":"billing","handler":"rag"}
+{"message":"Can I cancel an order that is already packed?","issue_type":"returns","lane":"returns","handler":"rag"}
+{"message":"My tracking has not updated.","issue_type":"shipping","lane":"shipping","handler":"rag"}
+{"message":"Can I return an opened but defective Blu-ray?","issue_type":"returns","lane":"returns","handler":"rag"}
+{"message":"What is inside the Cinema Classics box set?","issue_type":"general","lane":"general","handler":"rag"}
+{"message":"Please give me a refund for scratched DVD ORD-1003.","issue_type":"refund","lane":"returns","handler":"refund"}
