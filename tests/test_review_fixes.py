@@ -110,7 +110,13 @@ def test_shared_api_contract_matches_backend_models() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_browser_navigation_returns_console() -> None:
+async def test_run_browser_navigation_returns_console(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    console_dist = tmp_path / "dist"
+    console_dist.mkdir()
+    (console_dist / "index.html").write_text("<main>Support Copilot</main>")
+    monkeypatch.setattr("support_copilot.api.CONSOLE_DIST", console_dist)
     request = SimpleNamespace(headers={"accept": "text/html,application/xhtml+xml"})
 
     response = await get_run("run-1", request, FakeRedis({"run_id": "run-1"}))
