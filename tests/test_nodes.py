@@ -32,6 +32,33 @@ async def test_rag_retrieves_documents_and_responds_from_context() -> None:
 
 
 @pytest.mark.asyncio
+async def test_same_thread_answer_receives_prior_messages() -> None:
+    class ContextModel(FakeModel):
+        def __init__(self) -> None:
+            super().__init__(defaults())
+            self.prompts: list[str] = []
+
+        async def generate(self, system: str, user: str) -> str:
+            self.prompts.append(user)
+            return f"Reply {len(self.prompts)}"
+
+    model = ContextModel()
+    graph = build_graph(GraphDependencies(model, FakeRepository(), FakeCache()), InMemorySaver())
+    config = {"configurable": {"thread_id": "context-thread"}}
+    await graph.ainvoke(
+        {"message": "What are the return rules for unopened items?", "conversation_history": [{"role": "user", "content": "What are the return rules for unopened items?"}]},
+        config=config,
+    )
+    await graph.ainvoke(
+        {"message": "What did I just ask about?", "conversation_history": [{"role": "user", "content": "What did I just ask about?"}]},
+        config=config,
+    )
+
+    assert "What are the return rules for unopened items?" in model.prompts[-1]
+    assert "Reply 1" in model.prompts[-1]
+
+
+@pytest.mark.asyncio
 async def test_sql_query_is_cached() -> None:
     repository = FakeRepository()
     cache = FakeCache()

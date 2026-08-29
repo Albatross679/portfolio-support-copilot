@@ -8,7 +8,7 @@ it("shows the extraction, refund route, and approval proposal from the mock API"
   render(<RunView client={createMockApi()} runId="run_refund_2048" />);
 
   expect(await screen.findByText("The Seventh Seal")).toBeInTheDocument();
-  expect(screen.getByText("refund", { selector: ".route" })).toBeInTheDocument();
+  expect(screen.getByText("returns - refund", { selector: ".route" })).toBeInTheDocument();
   expect(screen.getByRole("region", { name: "Awaiting approval" })).toBeInTheDocument();
   expect(screen.getByText("$29.99")).toBeInTheDocument();
 });
@@ -23,7 +23,7 @@ it.each(["completed", "failed"] as const)("stops polling after a %s run loads", 
   vi.useFakeTimers();
   try {
     const client = createMockApi();
-    const getRun = vi.spyOn(client, "getRun").mockResolvedValue({ run_id: "run_terminal", status });
+    const getRun = vi.spyOn(client, "getRun").mockResolvedValue({ run_id: "run_terminal", thread_id: "thread_terminal", status });
 
     render(<RunView client={client} runId="run_terminal" />);
     await act(async () => Promise.resolve());
@@ -46,7 +46,7 @@ it("ignores an earlier run request after navigation", async () => {
     const client = createMockApi();
     const getRun = vi.spyOn(client, "getRun").mockImplementation((runId) => runId === "run_earlier"
       ? earlierRequest
-      : Promise.resolve({ run_id: "run_current", status: "processing" }));
+      : Promise.resolve({ run_id: "run_current", thread_id: "thread_current", status: "running" }));
 
     const { rerender } = render(<RunView client={client} runId="run_earlier" />);
     await act(async () => Promise.resolve());
@@ -54,7 +54,7 @@ it("ignores an earlier run request after navigation", async () => {
     await act(async () => Promise.resolve());
     expect(screen.getByText("run_current")).toBeInTheDocument();
 
-    await act(async () => finishEarlierRequest({ run_id: "run_earlier", status: "completed" }));
+    await act(async () => finishEarlierRequest({ run_id: "run_earlier", thread_id: "thread_earlier", status: "completed" }));
     expect(screen.getByText("run_current")).toBeInTheDocument();
     expect(screen.queryByText("run_earlier")).not.toBeInTheDocument();
 

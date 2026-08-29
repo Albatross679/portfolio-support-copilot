@@ -1,19 +1,21 @@
 # API contract
 
-The console calls the FastAPI service at `VITE_API_BASE`. A blank base URL means same-origin requests.
+The Compose console and API share one origin. In Vite development, leave `VITE_API_BASE` blank to use the development proxy, or set it to a local API origin such as `http://localhost:8000`; the API permits local Vite origins.
 
 ## Create a run
 
-`POST /runs` accepts `{ "message": "customer support text" }` and returns `{ "run_id": "string" }` immediately. Work continues asynchronously.
+`POST /runs` accepts `{ "message": "customer support text", "thread_id": "optional existing thread" }` and returns `{ "run_id": "string", "thread_id": "string" }` immediately. Work continues asynchronously.
 
 ## Read a run
 
-`GET /runs/{run_id}` returns a run object with `run_id`, `status`, and, once available, `extraction`, `route`, `final_answer`, and `proposed_refund`. `status` is one of `queued`, `processing`, `awaiting_approval`, `completed`, or `failed`. `extraction` contains `order_number`, `product_title`, `format`, `issue_type`, and `sentiment`, each as a string or null. `route` is `billing`, `shipping`, `returns`, `general`, or `refund`. An `awaiting_approval` run includes `proposed_refund` with numeric `amount`, ISO `currency`, and `reason`.
+`GET /runs/{run_id}` returns a run object with `run_id`, `thread_id`, and `status`, plus `extraction`, `route`, `answer`, and `proposed_refund` once available. `status` is one of `queued`, `running`, `awaiting_approval`, `completed`, or `failed`. `extraction` contains `order_number`, `product_title`, `media_format`, `issue_type`, and `sentiment`, each as a string or null. `route` is `{ "lane", "handler", "rationale" }`; the handler is `rag`, `sql`, or `refund`. An `awaiting_approval` run includes `proposed_refund` with `order_number`, integer `amount_cents`, ISO `currency`, and `reason`.
 
 ## List paused runs
 
-`GET /runs?status=awaiting_approval` returns `{ "runs": [Run] }`, where every item uses the run object above. This listing endpoint is the small addition needed for the approval inbox and follows the run-status contract in `SCOPE.md`.
+`GET /runs?status=awaiting_approval` returns `{ "runs": [Run] }`. This is the approval inbox endpoint.
 
 ## Decide a refund
 
-`POST /runs/{run_id}/decision` accepts `{ "decision": "approve" }` or `{ "decision": "reject" }` and returns `{ "run_id": "string", "status": "completed" }`. The backend resumes the paused graph and the run's final answer is then available through `GET /runs/{run_id}`.
+`POST /runs/{run_id}/decision` accepts `{ "decision": "approve" }` or `{ "decision": "reject" }`, enqueues a resume job, and returns the current run object with `202`. Poll `GET /runs/{run_id}` until it is completed to read its `answer`.
+
+The shared field inventory is in [`api-contract.json`](api-contract.json). Backend tests compare it to the Pydantic response models, and console types derive their field names and statuses from it.

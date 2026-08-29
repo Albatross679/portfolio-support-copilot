@@ -22,5 +22,5 @@ it("rejects a paused mock run", async () => {
   await screen.findByText("run_refund_2048");
   await user.click(screen.getByRole("button", { name: "Reject refund" }));
 
-  expect((await client.getRun("run_refund_2048")).final_answer).toMatch(/not approved/);
+  expect((await client.getRun("run_refund_2048")).answer).toMatch(/not approved/);
 });

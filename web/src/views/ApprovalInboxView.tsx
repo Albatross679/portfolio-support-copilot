@@ -31,7 +31,7 @@ export function ApprovalInboxView({ client = api, onOpenRun }: ApprovalInboxView
     setBusyRunId(runId);
     try {
       await client.decideRun(runId, { decision });
-      await loadRuns();
+      setRuns((current) => current.filter((run) => run.run_id !== runId));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to save the decision.");
     } finally {

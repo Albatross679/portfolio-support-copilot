@@ -1,16 +1,24 @@
 import asyncio
 import json
 from contextlib import asynccontextmanager
+from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 from fastapi import HTTPException
 
-from support_copilot.api import decide_run
+from support_copilot.api import decide_run, list_runs
 from support_copilot.ingest import find_help_directory
 from support_copilot.model import strict_json_schema
-from support_copilot.schemas import DecisionRequest, Extraction
+from support_copilot.schemas import (
+    DecisionRequest,
+    Extraction,
+    RefundProposal,
+    RouteDecision,
+    RunState,
+    RunStatus,
+)
 from support_copilot.worker import THREAD_LOCK_TIMEOUT_SECONDS, WorkerSettings, run_agent
 
 
@@ -33,9 +41,28 @@ class FakeRedis:
         self.enqueued.append((*args, kwargs))
         return self.enqueue_result
 
+    async def scan_iter(self, *, match: str) -> Any:
+        assert match == "run:*"
+        for key in self.values:
+            yield key
+
     @asynccontextmanager
     async def lock(self, *args: Any, **kwargs: Any):
         yield
+
+
+def test_shared_api_contract_matches_backend_models() -> None:
+    contract_path = Path(__file__).parents[1] / "web" / "api-contract.json"
+    contract = json.loads(contract_path.read_text())
+
+    assert contract["runStatuses"] == list(get_args(RunState.__value__))
+    assert contract["extractionFields"] == list(Extraction.model_fields)
+    assert contract["routeFields"] == list(RouteDecision.model_fields)
+    assert contract["refundFields"] == list(RefundProposal.model_fields)
+    assert contract["runFields"] == list(RunStatus.model_fields)
+    assert 'import contract from "../api-contract.json"' in (
+        contract_path.parent / "src" / "types.ts"
+    ).read_text()
 
 
 def test_openrouter_strict_schema_requires_every_property() -> None:
@@ -61,6 +88,31 @@ def test_help_documents_are_found_from_the_process_working_directory(
 
 def test_thread_lock_outlives_worker_job_timeout() -> None:
     assert THREAD_LOCK_TIMEOUT_SECONDS > WorkerSettings.job_timeout
+
+
+@pytest.mark.asyncio
+async def test_list_runs_filters_awaiting_approval() -> None:
+    paused = {
+        "run_id": "run-paused",
+        "thread_id": "thread-1",
+        "status": "awaiting_approval",
+        "proposed_refund": {
+            "order_number": "ORD-1001",
+            "amount_cents": 2999,
+            "currency": "USD",
+            "reason": "damaged_disc",
+        },
+    }
+    redis = FakeRedis(paused)
+    redis.values["run:run-completed"] = json.dumps(
+        {"run_id": "run-completed", "thread_id": "thread-2", "status": "completed"}
+    )
+
+    result = await list_runs("awaiting_approval", redis)
+
+    assert [run.run_id for run in result.runs] == ["run-paused"]
+    assert result.runs[0].proposed_refund is not None
+    assert result.runs[0].proposed_refund.amount_cents == 2999
 
 
 @pytest.mark.asyncio

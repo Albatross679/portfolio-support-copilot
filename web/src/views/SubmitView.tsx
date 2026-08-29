@@ -4,10 +4,12 @@ import type { SupportApi } from "../types";
 
 interface SubmitViewProps {
   client?: SupportApi;
+  threadId?: string;
   onRunCreated: (runId: string) => void;
+  onClearThread: () => void;
 }
 
-export function SubmitView({ client = api, onRunCreated }: SubmitViewProps) {
+export function SubmitView({ client = api, threadId, onRunCreated, onClearThread }: SubmitViewProps) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -21,7 +23,7 @@ export function SubmitView({ client = api, onRunCreated }: SubmitViewProps) {
     setError("");
     setSubmitting(true);
     try {
-      const { run_id } = await client.createRun({ message: message.trim() });
+      const { run_id } = await client.createRun({ message: message.trim(), ...(threadId ? { thread_id: threadId } : {}) });
       onRunCreated(run_id);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to create the run.");
@@ -36,6 +38,7 @@ export function SubmitView({ client = api, onRunCreated }: SubmitViewProps) {
         <p className="eyebrow">New support run</p>
         <h1>Send a customer message to the copilot.</h1>
         <p>This console submits work and shows its progress. Extraction, routing, retrieval, and refund decisions happen in the backend.</p>
+        {threadId && <p className="muted">Continuing thread <code>{threadId}</code>. <button className="link-button" type="button" onClick={onClearThread}>Start a new thread</button></p>}
       </div>
       <form className="message-form" onSubmit={handleSubmit}>
         <label htmlFor="support-message">Customer message</label>

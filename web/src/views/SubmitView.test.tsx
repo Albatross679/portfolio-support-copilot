@@ -7,7 +7,7 @@ import { SubmitView } from "./SubmitView";
 it("submits a message through the mock API and opens its run", async () => {
   const user = userEvent.setup();
   const onRunCreated = vi.fn();
-  render(<SubmitView client={createMockApi()} onRunCreated={onRunCreated} />);
+  render(<SubmitView client={createMockApi()} onClearThread={vi.fn()} onRunCreated={onRunCreated} />);
 
   await user.type(screen.getByLabelText("Customer message"), "Where is my order #1082?");
   await user.click(screen.getByRole("button", { name: "Start support run" }));
@@ -15,9 +15,20 @@ it("submits a message through the mock API and opens its run", async () => {
   expect(onRunCreated).toHaveBeenCalledWith("run_demo_3000");
 });
 
+it("reuses the selected thread for a follow-up", async () => {
+  const user = userEvent.setup();
+  const client = createMockApi();
+  render(<SubmitView client={client} threadId="thread_existing" onClearThread={vi.fn()} onRunCreated={vi.fn()} />);
+
+  await user.type(screen.getByLabelText("Customer message"), "What did I just ask about?");
+  await user.click(screen.getByRole("button", { name: "Start support run" }));
+
+  expect((await client.getRun("run_demo_3000")).thread_id).toBe("thread_existing");
+});
+
 it("requires a customer message", async () => {
   const user = userEvent.setup();
-  render(<SubmitView client={createMockApi()} onRunCreated={vi.fn()} />);
+  render(<SubmitView client={createMockApi()} onClearThread={vi.fn()} onRunCreated={vi.fn()} />);
 
   await user.click(screen.getByRole("button", { name: "Start support run" }));
 

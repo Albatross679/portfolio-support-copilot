@@ -6,9 +6,10 @@ import type { SupportApi, SupportRun } from "../types";
 interface RunViewProps {
   runId: string;
   client?: SupportApi;
+  onFollowUp?: (threadId: string) => void;
 }
 
-export function RunView({ runId, client = api }: RunViewProps) {
+export function RunView({ runId, client = api, onFollowUp }: RunViewProps) {
   const [run, setRun] = useState<SupportRun>();
   const [error, setError] = useState("");
   const [refreshCount, setRefreshCount] = useState(0);
@@ -56,7 +57,10 @@ export function RunView({ runId, client = api }: RunViewProps) {
       </div>
       {error && <p className="error" role="alert">{error}</p>}
       {!run && !error && <p className="loading">Loading run...</p>}
-      {run && <RunDetails run={run} />}
+      {run && <>
+        <RunDetails run={run} />
+        {onFollowUp && (run.status === "completed" || run.status === "awaiting_approval") && <button className="secondary-button" type="button" onClick={() => onFollowUp(run.thread_id)}>Send a follow-up in this thread</button>}
+      </>}
     </main>
   );
 }

@@ -21,15 +21,18 @@ FastAPI accepts and reports runs only. The arq worker owns graph execution, whil
 ## API contract
 
 - `POST /runs` accepts `{ "message": "...", "thread_id": "optional" }` and returns `202` with `{ "run_id", "thread_id" }`.
-- `GET /runs/{run_id}` returns queued, running, awaiting_approval, completed, or failed state. Paused runs include `proposed_refund`.
-- `POST /runs/{run_id}/decision` accepts `{ "decision": "approve" | "reject" }`, enqueues a resume job, and returns `202`.
+- `GET /runs/{run_id}` returns queued, running, awaiting_approval, completed, or failed state. Runs use `answer`, `extraction.media_format`, a `{ lane, handler, rationale }` route object, and integer refund `amount_cents`. Paused runs include `proposed_refund`.
+- `GET /runs?status=awaiting_approval` lists paused runs for the approval inbox.
+- `POST /runs/{run_id}/decision` accepts `{ "decision": "approve" | "reject" }`, enqueues a resume job, and returns `202` with the current run state.
 
 ## Run locally
 
 1. Copy `.env.example` to `.env` and set `OPENROUTER_API_KEY`. The key is required for model calls and help-document ingestion.
 2. Run `docker compose up --build`. If port 8000 is already in use, run `API_PORT=8001 docker compose up --build` and use port 8001 in the URLs below.
-3. Open `http://localhost:8000/docs` or submit a request with `curl -X POST http://localhost:8000/runs -H 'content-type: application/json' -d '{"message":"My damaged 4K order ORD-1001 needs a refund."}'`.
-4. Poll `GET /runs/<run_id>`. When it is `awaiting_approval`, post `{"decision":"approve"}` to `/runs/<run_id>/decision`.
+3. Open `http://localhost:8000` for the built React console and submit a support message. The API documentation remains at `http://localhost:8000/docs`; direct API submissions also work with `curl -X POST http://localhost:8000/runs -H 'content-type: application/json' -d '{"message":"My damaged 4K order ORD-1001 needs a refund."}'`.
+4. Poll `GET /runs/<run_id>`. When it is `awaiting_approval`, approve or reject it from the console's Approval inbox, or post `{"decision":"approve"}` to `/runs/<run_id>/decision`.
+
+For console development, run `cd web && npm install && npm run dev`. Leave `VITE_API_BASE` blank to use the Vite proxy to `http://localhost:8000`, or set `VITE_API_BASE=http://localhost:8000 npm run dev`; the API permits local Vite origins. Use `VITE_API_BASE=http://localhost:8001` when the Compose fallback port is in use.
 
 The `init` Compose service applies the schema, seeds fake business data, creates LangGraph checkpoint tables, and embeds all documents in `docs/help/`. It exits successfully without a key so the API and worker can still boot, but RAG runs require embeddings and therefore an OpenRouter key. Re-ingest documents after changes with `docker compose run --rm init python scripts/ingest_help.py`.
 

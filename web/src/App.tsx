@@ -7,6 +7,10 @@ function currentPath(): string {
   return window.location.pathname;
 }
 
+function currentThreadId(): string | undefined {
+  return new URLSearchParams(window.location.search).get("thread_id") ?? undefined;
+}
+
 function navigate(path: string) {
   window.history.pushState({}, "", path);
   window.dispatchEvent(new PopStateEvent("popstate"));
@@ -14,19 +18,23 @@ function navigate(path: string) {
 
 export default function App() {
   const [path, setPath] = useState(currentPath);
+  const [threadId, setThreadId] = useState(currentThreadId);
 
   useEffect(() => {
-    const updatePath = () => setPath(currentPath());
+    const updatePath = () => {
+      setPath(currentPath());
+      setThreadId(currentThreadId());
+    };
     window.addEventListener("popstate", updatePath);
     return () => window.removeEventListener("popstate", updatePath);
   }, []);
 
   const runId = path.match(/^\/runs\/([^/]+)$/)?.[1];
   const view = runId
-    ? <RunView runId={decodeURIComponent(runId)} />
+    ? <RunView runId={decodeURIComponent(runId)} onFollowUp={(id) => navigate(`/?thread_id=${encodeURIComponent(id)}`)} />
     : path === "/approvals"
       ? <ApprovalInboxView onOpenRun={(id) => navigate(`/runs/${encodeURIComponent(id)}`)} />
-      : <SubmitView onRunCreated={(id) => navigate(`/runs/${encodeURIComponent(id)}`)} />;
+      : <SubmitView threadId={threadId} onClearThread={() => navigate("/")} onRunCreated={(id) => navigate(`/runs/${encodeURIComponent(id)}`)} />;
 
   return (
     <div className="app-shell">

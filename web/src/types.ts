@@ -1,48 +1,55 @@
-export type RunStatus = "queued" | "processing" | "awaiting_approval" | "completed" | "failed";
+import contract from "../api-contract.json";
 
-export type SupportRoute = "billing" | "shipping" | "returns" | "general" | "refund";
+export const apiContract = contract;
+export type RunStatus = "queued" | "running" | "awaiting_approval" | "completed" | "failed";
 
 export interface StructuredExtraction {
   order_number: string | null;
   product_title: string | null;
-  format: string | null;
+  media_format: string | null;
   issue_type: string | null;
   sentiment: string | null;
 }
 
+export interface SupportRoute {
+  lane: string;
+  handler: string;
+  rationale: string;
+}
+
 export interface ProposedRefund {
-  amount: number;
+  order_number: string;
+  amount_cents: number;
   currency: string;
   reason: string;
 }
 
 export interface SupportRun {
   run_id: string;
+  thread_id: string;
   status: RunStatus;
-  message?: string;
   extraction?: StructuredExtraction;
   route?: SupportRoute;
-  final_answer?: string;
   proposed_refund?: ProposedRefund;
+  answer?: string;
   error?: string;
 }
 
 export interface CreateRunRequest {
   message: string;
+  thread_id?: string;
 }
 
 export interface CreateRunResponse {
   run_id: string;
+  thread_id: string;
 }
 
 export interface DecisionRequest {
   decision: "approve" | "reject";
 }
 
-export interface DecisionResponse {
-  run_id: string;
-  status: RunStatus;
-}
+export type DecisionResponse = SupportRun;
 
 export interface RunListResponse {
   runs: SupportRun[];

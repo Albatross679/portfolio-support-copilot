@@ -1,0 +1,7 @@
+{
+  "runStatuses": ["queued", "running", "awaiting_approval", "completed", "failed"],
+  "extractionFields": ["order_number", "product_title", "media_format", "issue_type", "sentiment"],
+  "routeFields": ["lane", "handler", "rationale"],
+  "refundFields": ["order_number", "amount_cents", "currency", "reason"],
+  "runFields": ["run_id", "thread_id", "status", "extraction", "route", "proposed_refund", "answer", "error"]
+}
