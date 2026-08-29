@@ -84,7 +84,14 @@ async def list_runs(
 
 
 @app.get("/runs/{run_id}", response_model=RunStatus)
-async def get_run(run_id: str, redis: Any = Depends(redis_client)) -> RunStatus:
+async def get_run(
+    run_id: str, request: Request, redis: Any = Depends(redis_client)
+) -> RunStatus | FileResponse:
+    if "text/html" in request.headers.get("accept", "") and CONSOLE_DIST.is_dir():
+        return FileResponse(
+            CONSOLE_DIST / "index.html",
+            headers={"Cache-Control": "no-store", "Vary": "Accept"},
+        )
     return RunStatus.model_validate(await read_run(redis, run_id))
 
 

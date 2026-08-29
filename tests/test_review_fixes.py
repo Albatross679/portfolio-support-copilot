@@ -9,7 +9,7 @@ import pytest
 from fastapi import HTTPException
 from pydantic import BaseModel
 
-from support_copilot.api import decide_run, list_runs
+from support_copilot.api import decide_run, get_run, list_runs
 from support_copilot.ingest import find_help_directory
 from support_copilot.model import strict_json_schema
 from support_copilot.schemas import (
@@ -107,6 +107,18 @@ def test_shared_api_contract_matches_backend_models() -> None:
     }
 
     assert contract["types"] == expected_types
+
+
+@pytest.mark.asyncio
+async def test_run_browser_navigation_returns_console() -> None:
+    request = SimpleNamespace(headers={"accept": "text/html,application/xhtml+xml"})
+
+    response = await get_run("run-1", request, FakeRedis({"run_id": "run-1"}))
+
+    assert response.media_type == "text/html"
+    assert Path(response.path).name == "index.html"
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["vary"] == "Accept"
 
 
 def test_openrouter_strict_schema_requires_every_property() -> None:
