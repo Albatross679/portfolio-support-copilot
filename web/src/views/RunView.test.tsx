@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { createMockApi } from "../api";
 import type { SupportRun } from "../types";
@@ -17,6 +17,20 @@ it("shows the final answer for a completed mock run", async () => {
   render(<RunView client={createMockApi()} runId="run_shipping_1082" />);
 
   expect(await screen.findByText(/expected to arrive on Thursday/)).toBeInTheDocument();
+});
+
+it("offers a follow-up only after the run completes", async () => {
+  const onFollowUp = vi.fn();
+  const { rerender } = render(<RunView client={createMockApi()} onFollowUp={onFollowUp} runId="run_refund_2048" />);
+
+  expect(await screen.findByText("You can send a follow-up after this run completes.")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Send a follow-up in this thread" })).not.toBeInTheDocument();
+
+  rerender(<RunView client={createMockApi()} onFollowUp={onFollowUp} runId="run_shipping_1082" />);
+  const followUp = await screen.findByRole("button", { name: "Send a follow-up in this thread" });
+  fireEvent.click(followUp);
+
+  expect(onFollowUp).toHaveBeenCalledWith("thread_shipping_1082");
 });
 
 it.each(["completed", "failed"] as const)("stops polling after a %s run loads", async (status) => {

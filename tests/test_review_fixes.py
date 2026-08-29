@@ -2,11 +2,12 @@ import asyncio
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
-from types import SimpleNamespace
-from typing import Any, get_args
+from types import NoneType, SimpleNamespace, UnionType
+from typing import Any, Literal, get_args, get_origin
 
 import pytest
 from fastapi import HTTPException
+from pydantic import BaseModel
 
 from support_copilot.api import decide_run, list_runs
 from support_copilot.ingest import find_help_directory
@@ -16,6 +17,9 @@ from support_copilot.schemas import (
     Extraction,
     RefundProposal,
     RouteDecision,
+    RunCreated,
+    RunList,
+    RunRequest,
     RunState,
     RunStatus,
 )
@@ -51,18 +55,58 @@ class FakeRedis:
         yield
 
 
+CONTRACT_MODEL_NAMES = {
+    Extraction: "StructuredExtraction",
+    RouteDecision: "SupportRoute",
+    RefundProposal: "ProposedRefund",
+    RunStatus: "SupportRun",
+    RunRequest: "CreateRunRequest",
+    RunCreated: "CreateRunResponse",
+    DecisionRequest: "DecisionRequest",
+    RunList: "RunListResponse",
+}
+
+
+def contract_type(annotation: Any) -> Any:
+    if annotation is RunState:
+        return {"ref": "RunStatus"}
+    origin = get_origin(annotation)
+    arguments = get_args(annotation)
+    if origin is Literal:
+        return {"enum": list(arguments)}
+    if origin is UnionType:
+        non_null = [argument for argument in arguments if argument is not NoneType]
+        assert len(non_null) == 1 and len(arguments) == 2
+        return {"nullable": contract_type(non_null[0])}
+    if origin is list:
+        return {"array": contract_type(arguments[0])}
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        return {"ref": CONTRACT_MODEL_NAMES[annotation]}
+    return {str: "string", int: "integer"}[annotation]
+
+
+def contract_model(model: type[BaseModel]) -> dict[str, Any]:
+    return {
+        "properties": {
+            name: contract_type(field.annotation) for name, field in model.model_fields.items()
+        },
+        "required": [name for name, field in model.model_fields.items() if field.is_required()],
+    }
+
+
 def test_shared_api_contract_matches_backend_models() -> None:
     contract_path = Path(__file__).parents[1] / "web" / "api-contract.json"
     contract = json.loads(contract_path.read_text())
 
-    assert contract["runStatuses"] == list(get_args(RunState.__value__))
-    assert contract["extractionFields"] == list(Extraction.model_fields)
-    assert contract["routeFields"] == list(RouteDecision.model_fields)
-    assert contract["refundFields"] == list(RefundProposal.model_fields)
-    assert contract["runFields"] == list(RunStatus.model_fields)
-    assert 'import contract from "../api-contract.json"' in (
-        contract_path.parent / "src" / "types.ts"
-    ).read_text()
+    expected_types = {
+        "RunStatus": {"enum": list(get_args(RunState.__value__))},
+        **{
+            frontend_name: contract_model(model)
+            for model, frontend_name in CONTRACT_MODEL_NAMES.items()
+        },
+    }
+
+    assert contract["types"] == expected_types
 
 
 def test_openrouter_strict_schema_requires_every_property() -> None:

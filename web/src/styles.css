@@ -63,6 +63,8 @@ dd { color: #1e2930; margin: 0; }
 .inbox-item { padding: 0; }
 .inbox-item .run-details { border: 0; box-shadow: none; }
 .button-row { border-top: 1px solid #e6e9e5; display: flex; flex-wrap: wrap; gap: 10px; padding: 18px 27px; }
+.follow-up-button, .follow-up-note { margin-top: 16px; }
+.follow-up-note { font-size: 0.9rem; }
 
 @media (max-width: 650px) {
   .app-shell { padding-inline: 16px; }

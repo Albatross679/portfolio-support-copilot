@@ -59,7 +59,8 @@ export function RunView({ runId, client = api, onFollowUp }: RunViewProps) {
       {!run && !error && <p className="loading">Loading run...</p>}
       {run && <>
         <RunDetails run={run} />
-        {onFollowUp && (run.status === "completed" || run.status === "awaiting_approval") && <button className="secondary-button" type="button" onClick={() => onFollowUp(run.thread_id)}>Send a follow-up in this thread</button>}
+        {onFollowUp && run.status === "completed" && <button className="secondary-button follow-up-button" type="button" onClick={() => onFollowUp(run.thread_id)}>Send a follow-up in this thread</button>}
+        {onFollowUp && run.status === "awaiting_approval" && <p className="follow-up-note">You can send a follow-up after this run completes.</p>}
       </>}
     </main>
   );

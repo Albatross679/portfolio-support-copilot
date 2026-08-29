@@ -4,8 +4,12 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "contract:generate": "node scripts/generate-contract.mjs",
+    "contract:check": "node scripts/generate-contract.mjs --check",
     "dev": "vite",
+    "prebuild": "npm run contract:check",
     "build": "tsc -b && vite build",
+    "pretest": "npm run contract:check",
     "test": "vitest run",
     "test:watch": "vitest"
   },

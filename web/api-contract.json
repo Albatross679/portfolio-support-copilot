@@ -1,7 +1,73 @@
 {
-  "runStatuses": ["queued", "running", "awaiting_approval", "completed", "failed"],
-  "extractionFields": ["order_number", "product_title", "media_format", "issue_type", "sentiment"],
-  "routeFields": ["lane", "handler", "rationale"],
-  "refundFields": ["order_number", "amount_cents", "currency", "reason"],
-  "runFields": ["run_id", "thread_id", "status", "extraction", "route", "proposed_refund", "answer", "error"]
+  "types": {
+    "RunStatus": {
+      "enum": ["queued", "running", "awaiting_approval", "completed", "failed"]
+    },
+    "StructuredExtraction": {
+      "properties": {
+        "order_number": { "nullable": "string" },
+        "product_title": { "nullable": "string" },
+        "media_format": { "enum": ["Blu-ray", "DVD", "4K UHD", "box set", "unknown"] },
+        "issue_type": { "enum": ["billing", "shipping", "returns", "refund", "damaged_disc", "region_code", "preorder", "sales_query", "general"] },
+        "sentiment": { "enum": ["positive", "neutral", "frustrated", "angry"] }
+      },
+      "required": []
+    },
+    "SupportRoute": {
+      "properties": {
+        "lane": { "enum": ["billing", "shipping", "returns", "general"] },
+        "handler": { "enum": ["rag", "sql", "refund"] },
+        "rationale": "string"
+      },
+      "required": ["lane", "handler", "rationale"]
+    },
+    "ProposedRefund": {
+      "properties": {
+        "order_number": "string",
+        "amount_cents": "integer",
+        "currency": { "enum": ["USD"] },
+        "reason": "string"
+      },
+      "required": ["order_number", "amount_cents", "reason"]
+    },
+    "SupportRun": {
+      "properties": {
+        "run_id": "string",
+        "thread_id": "string",
+        "status": { "ref": "RunStatus" },
+        "extraction": { "nullable": { "ref": "StructuredExtraction" } },
+        "route": { "nullable": { "ref": "SupportRoute" } },
+        "proposed_refund": { "nullable": { "ref": "ProposedRefund" } },
+        "answer": { "nullable": "string" },
+        "error": { "nullable": "string" }
+      },
+      "required": ["run_id", "thread_id", "status"]
+    },
+    "CreateRunRequest": {
+      "properties": {
+        "message": "string",
+        "thread_id": { "nullable": "string" }
+      },
+      "required": ["message"]
+    },
+    "CreateRunResponse": {
+      "properties": {
+        "run_id": "string",
+        "thread_id": "string"
+      },
+      "required": ["run_id", "thread_id"]
+    },
+    "DecisionRequest": {
+      "properties": {
+        "decision": { "enum": ["approve", "reject"] }
+      },
+      "required": ["decision"]
+    },
+    "RunListResponse": {
+      "properties": {
+        "runs": { "array": { "ref": "SupportRun" } }
+      },
+      "required": ["runs"]
+    }
+  }
 }
