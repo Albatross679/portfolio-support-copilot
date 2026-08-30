@@ -96,6 +96,9 @@ class StoreRepository:
 
 
 def vector_literal(values: Sequence[float]) -> str:
+    """
+    Convert a list of floats to a PostgreSQL vector literal.
+    """
     return "[" + ",".join(str(value) for value in values) + "]"
 
 
