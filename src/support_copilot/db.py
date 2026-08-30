@@ -90,9 +90,7 @@ class StoreRepository:
         validate_readonly_sql(sql)
         return await self._execute_readonly(sql)
 
-    async def query_customer_readonly(
-        self, sql: str, customer_id: int
-    ) -> list[dict[str, Any]]:
+    async def query_customer_readonly(self, sql: str, customer_id: int) -> list[dict[str, Any]]:
         validate_readonly_sql(sql)
         return await self._execute_readonly(scope_customer_sql(sql, customer_id))
 

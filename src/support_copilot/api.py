@@ -131,7 +131,9 @@ async def create_run(
         if payload.order_number and not await repository.customer_owns_order(
             customer_id, payload.order_number
         ):
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Order not found")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Order not found"
+            )
     elif payload.order_number:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

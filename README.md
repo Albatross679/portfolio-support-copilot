@@ -8,6 +8,9 @@ Portfolio Support Copilot is an async customer-support copilot for a physical-me
 React console
           |
           v
+POST /customers/identify -----> FastAPI -----> Postgres business tables
+GET /customers/{id}/orders ---/       |
+                                       |
 POST /runs -> FastAPI -> Redis/arq queue -> worker -> LangGraph
 GET /runs <----------------------------------|       extract -> route -> [rag | sql | refund] -> respond
 POST /runs/{id}/decision -> Redis/arq queue -> worker -> Command(resume=approve|reject)
@@ -16,7 +19,7 @@ POST /runs/{id}/decision -> Redis/arq queue -> worker -> Command(resume=approve|
                               Postgres + pgvector <- checkpointer, business tables, help-doc embeddings
 ```
 
-FastAPI serves the built console and accepts and reports runs. The arq worker owns graph execution, while Redis holds the queue, run status, and cached SQL tool results. A shared async OpenRouter client supplies structured JSON output and embeddings. Postgres stores fake customers, products, orders, pgvector help-document chunks, and LangGraph's durable checkpoint state keyed by `thread_id`.
+FastAPI serves the built console, reads customer and order data, and accepts and reports runs. The arq worker owns graph execution, while Redis holds the queue, run status, paused-order indexes, and cached SQL tool results. A shared async OpenRouter client supplies structured JSON output and embeddings. Postgres stores fake customers, products, orders, pgvector help-document chunks, and LangGraph's durable checkpoint state keyed by `thread_id`.
 
 ## API contract
 

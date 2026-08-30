@@ -28,7 +28,5 @@ async def write_run_status(redis: Any, run_id: str, **update: Any) -> None:
             and data.get("customer_id") is not None
             and data.get("order_number")
         ):
-            transaction.hset(
-                awaiting_orders_key(data["customer_id"]), run_id, data["order_number"]
-            )
+            transaction.hset(awaiting_orders_key(data["customer_id"]), run_id, data["order_number"])
         await transaction.execute()

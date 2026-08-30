@@ -122,9 +122,10 @@ def build_nodes(deps: GraphDependencies) -> dict[str, Any]:
 
     async def respond(state: SupportState) -> dict[str, Any]:
         history = state.get("conversation_history", [])[-6:]
-        prior_context = "\n".join(
-            f"{entry['role'].title()}: {entry['content']}" for entry in history[:-1]
-        ) or "No prior messages in this thread."
+        prior_context = (
+            "\n".join(f"{entry['role'].title()}: {entry['content']}" for entry in history[:-1])
+            or "No prior messages in this thread."
+        )
         response = await deps.model.generate(
             "Answer as a concise store support copilot. Use only the supplied evidence and prior thread context. If a refund was rejected, say so plainly. Never claim a real payment was issued.",
             "\n".join(
@@ -136,7 +137,10 @@ def build_nodes(deps: GraphDependencies) -> dict[str, Any]:
                 ]
             ),
         )
-        return {"answer": response, "conversation_history": [{"role": "assistant", "content": response}]}
+        return {
+            "answer": response,
+            "conversation_history": [{"role": "assistant", "content": response}],
+        }
 
     return {
         "extract": extract,

@@ -35,9 +35,7 @@ class FakeRepository:
         self.queries.append(sql)
         return [{"copies_sold": 3}]
 
-    async def query_customer_readonly(
-        self, sql: str, customer_id: int
-    ) -> list[dict[str, Any]]:
+    async def query_customer_readonly(self, sql: str, customer_id: int) -> list[dict[str, Any]]:
         self.queries.append(f"customer:{customer_id}:{sql}")
         return [{"copies_sold": 1}]
 

@@ -20,6 +20,7 @@ from support_copilot.api import (
 )
 from support_copilot.ingest import find_help_directory
 from support_copilot.model import strict_json_schema
+from support_copilot.run_store import awaiting_orders_key, write_run_status
 from support_copilot.schemas import (
     CustomerIdentificationRequest,
     CustomerIdentificationResponse,
@@ -37,7 +38,6 @@ from support_copilot.schemas import (
     RunState,
     RunStatus,
 )
-from support_copilot.run_store import awaiting_orders_key, write_run_status
 from support_copilot.worker import THREAD_LOCK_TIMEOUT_SECONDS, WorkerSettings, run_agent
 
 
@@ -270,9 +270,7 @@ async def test_list_runs_filters_awaiting_approval() -> None:
 @pytest.mark.asyncio
 async def test_customer_lookup_orders_and_scoped_run_access() -> None:
     repository = FakeCustomerRepository()
-    repository.orders[0] = repository.orders[0].model_copy(
-        update={"refund_progress": "approved"}
-    )
+    repository.orders[0] = repository.orders[0].model_copy(update={"refund_progress": "approved"})
     redis = FakeRedis({"run_id": "run-paused", "thread_id": "thread-1", "status": "queued"})
     await write_run_status(
         redis,
@@ -295,10 +293,10 @@ async def test_customer_lookup_orders_and_scoped_run_access() -> None:
     missing = await identify_customer(
         CustomerIdentificationRequest(name="Maya Chen", email="wrong@example.test"), repository
     )
-    orders = await list_customer_orders(
-        1, "Maya Chen", "maya@example.test", redis, repository
+    orders = await list_customer_orders(1, "Maya Chen", "maya@example.test", redis, repository)
+    run = await get_customer_run(
+        1, "run-paused", "Maya Chen", "maya@example.test", redis, repository
     )
-    run = await get_customer_run(1, "run-paused", "Maya Chen", "maya@example.test", redis, repository)
 
     assert matched.customer == repository.customer
     assert missing.customer is None

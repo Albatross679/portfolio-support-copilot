@@ -78,11 +78,19 @@ async def test_same_thread_answer_receives_prior_messages() -> None:
     graph = build_graph(GraphDependencies(model, FakeRepository(), FakeCache()), InMemorySaver())
     config = {"configurable": {"thread_id": "context-thread"}}
     await graph.ainvoke(
-        {"message": "What are the return rules for unopened items?", "conversation_history": [{"role": "user", "content": "What are the return rules for unopened items?"}]},
+        {
+            "message": "What are the return rules for unopened items?",
+            "conversation_history": [
+                {"role": "user", "content": "What are the return rules for unopened items?"}
+            ],
+        },
         config=config,
     )
     await graph.ainvoke(
-        {"message": "What did I just ask about?", "conversation_history": [{"role": "user", "content": "What did I just ask about?"}]},
+        {
+            "message": "What did I just ask about?",
+            "conversation_history": [{"role": "user", "content": "What did I just ask about?"}],
+        },
         config=config,
     )
 
