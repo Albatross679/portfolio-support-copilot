@@ -44,23 +44,6 @@ CREATE TABLE IF NOT EXISTS help_document_embeddings (
   UNIQUE (document_name, chunk_index)
 );
 
-ALTER TABLE help_document_embeddings
-  ADD COLUMN IF NOT EXISTS document_fingerprint TEXT;
-
-DO $$
-BEGIN
-  IF (
-    SELECT format_type(atttypid, atttypmod) <> 'vector({{EMBEDDING_DIM}})'
-    FROM pg_attribute
-    WHERE attrelid = 'help_document_embeddings'::regclass
-      AND attname = 'embedding'
-  ) THEN
-    TRUNCATE help_document_embeddings RESTART IDENTITY;
-    ALTER TABLE help_document_embeddings
-      ALTER COLUMN embedding TYPE vector({{EMBEDDING_DIM}});
-  END IF;
-END $$;
-
 REVOKE ALL ON customers, products, orders FROM support_copilot_reader;
 GRANT SELECT ON customers, products, orders TO support_copilot_reader;
 GRANT support_copilot_reader TO CURRENT_USER;
