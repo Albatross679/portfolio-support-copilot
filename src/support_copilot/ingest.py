@@ -76,31 +76,31 @@ async def ingest_help_documents(
     if any(len(embedding) != embedding_dim for embedding in embeddings):
         raise ValueError(f"Embedding provider did not return {embedding_dim}-value vectors")
     async with pool.connection() as conn:
-        await conn.execute(
-            "DELETE FROM help_document_embeddings WHERE NOT (document_name = ANY(%s))",
-            (list(fingerprints),),
-        )
-        for name, _, _ in changed:
+        async with conn.transaction():
             await conn.execute(
-                "DELETE FROM help_document_embeddings WHERE document_name = %s", (name,)
+                "DELETE FROM help_document_embeddings WHERE NOT (document_name = ANY(%s))",
+                (list(fingerprints),),
             )
-        for (name, index, content), embedding in zip(rows, embeddings, strict=True):
-            await conn.execute(
-                """
-                INSERT INTO help_document_embeddings
-                    (document_name, chunk_index, content, metadata, embedding, document_fingerprint)
-                VALUES (%s, %s, %s, %s::jsonb, %s::vector, %s)
-                """,
-                (
-                    name,
-                    index,
-                    content,
-                    json.dumps({"source": name}),
-                    vector_literal(embedding),
-                    fingerprints[name],
-                ),
-            )
-        await conn.commit()
+            for name, _, _ in changed:
+                await conn.execute(
+                    "DELETE FROM help_document_embeddings WHERE document_name = %s", (name,)
+                )
+            for (name, index, content), embedding in zip(rows, embeddings, strict=True):
+                await conn.execute(
+                    """
+                    INSERT INTO help_document_embeddings
+                        (document_name, chunk_index, content, metadata, embedding, document_fingerprint)
+                    VALUES (%s, %s, %s, %s::jsonb, %s::vector, %s)
+                    """,
+                    (
+                        name,
+                        index,
+                        content,
+                        json.dumps({"source": name}),
+                        vector_literal(embedding),
+                        fingerprints[name],
+                    ),
+                )
     return len(rows)
 
 

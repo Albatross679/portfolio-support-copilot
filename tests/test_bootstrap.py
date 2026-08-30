@@ -1,3 +1,4 @@
+from copy import deepcopy
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,9 @@ class DemoDatabase:
     def __init__(self) -> None:
         self.business = {"customers": [], "products": [], "orders": []}
         self.embeddings: list[dict[str, Any]] = []
+        self.fail_on_embedding_insert: int | None = None
+        self.fail_on_business_insert: str | None = None
+        self.embedding_insert_count = 0
 
 
 class Connection:
@@ -50,10 +54,24 @@ class Connection:
                 row for row in self.database.embeddings if row["document_name"] != params[0]
             ]
         elif "INSERT INTO help_document_embeddings" in query:
+            self.database.embedding_insert_count += 1
+            if self.database.embedding_insert_count == self.database.fail_on_embedding_insert:
+                raise RuntimeError("embedding insert failed")
             self.database.embeddings.append(
                 {"document_name": params[0], "content": params[2], "fingerprint": params[5]}
             )
         return Result([])
+
+    @asynccontextmanager
+    async def transaction(self):
+        business = deepcopy(self.database.business)
+        embeddings = deepcopy(self.database.embeddings)
+        try:
+            yield
+        except Exception:
+            self.database.business = business
+            self.database.embeddings = embeddings
+            raise
 
     @asynccontextmanager
     async def cursor(self):
@@ -69,10 +87,16 @@ class Cursor:
 
     async def executemany(self, query: str, values: list[tuple[Any, ...]]) -> None:
         if "INSERT INTO customers" in query:
+            if self.database.fail_on_business_insert == "customers":
+                raise RuntimeError("customer insert failed")
             self.database.business["customers"].extend(values)
         elif "INSERT INTO products" in query:
+            if self.database.fail_on_business_insert == "products":
+                raise RuntimeError("product insert failed")
             self.database.business["products"].extend(values)
         elif "INSERT INTO orders" in query:
+            if self.database.fail_on_business_insert == "orders":
+                raise RuntimeError("order insert failed")
             self.database.business["orders"].extend(values)
 
 
@@ -179,3 +203,30 @@ async def test_reset_demo_data_wipes_and_reseeds(
     assert len(database.business["products"]) == 5
     assert len(database.business["orders"]) == 6
     assert database.business["orders"][0][-1] == "delivered"
+
+
+async def test_failed_document_replacement_keeps_previous_rows(
+    bootstrap_environment: tuple[DemoDatabase, FakeModel], tmp_path: Path
+) -> None:
+    database, _ = bootstrap_environment
+    await bootstrap.bootstrap()
+    previous_embeddings = deepcopy(database.embeddings)
+    (tmp_path / "docs" / "help" / "one.md").write_text("Changed " * 200)
+    database.fail_on_embedding_insert = database.embedding_insert_count + 2
+
+    with pytest.raises(RuntimeError, match="embedding insert failed"):
+        await bootstrap.bootstrap()
+
+    assert database.embeddings == previous_embeddings
+
+
+async def test_failed_seed_leaves_all_business_tables_empty(
+    bootstrap_environment: tuple[DemoDatabase, FakeModel],
+) -> None:
+    database, _ = bootstrap_environment
+    database.fail_on_business_insert = "products"
+
+    with pytest.raises(RuntimeError, match="product insert failed"):
+        await bootstrap.bootstrap()
+
+    assert database.business == {"customers": [], "products": [], "orders": []}
