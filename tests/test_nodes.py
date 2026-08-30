@@ -19,6 +19,38 @@ async def test_extract_and_route_use_structured_model_output() -> None:
 
 
 @pytest.mark.asyncio
+async def test_selected_order_overrides_model_extraction() -> None:
+    model = FakeModel(defaults())
+    nodes = build_nodes(GraphDependencies(model, FakeRepository(), FakeCache()))
+
+    extracted = await nodes["extract"](
+        {
+            "message": "My disc arrived scratched",
+            "customer_id": 1,
+            "selected_order_number": "ORD-1004",
+        }
+    )
+
+    assert extracted["extraction"]["order_number"] == "ORD-1004"
+
+
+@pytest.mark.asyncio
+async def test_customer_general_question_clears_model_order_extraction() -> None:
+    model = FakeModel(defaults())
+    nodes = build_nodes(GraphDependencies(model, FakeRepository(), FakeCache()))
+
+    extracted = await nodes["extract"](
+        {
+            "message": "How do refunds work for ORD-1001?",
+            "customer_id": 1,
+            "selected_order_number": None,
+        }
+    )
+
+    assert extracted["extraction"]["order_number"] is None
+
+
+@pytest.mark.asyncio
 async def test_rag_retrieves_documents_and_responds_from_context() -> None:
     model = FakeModel(defaults())
     nodes = build_nodes(GraphDependencies(model, FakeRepository(), FakeCache()))
@@ -46,11 +78,19 @@ async def test_same_thread_answer_receives_prior_messages() -> None:
     graph = build_graph(GraphDependencies(model, FakeRepository(), FakeCache()), InMemorySaver())
     config = {"configurable": {"thread_id": "context-thread"}}
     await graph.ainvoke(
-        {"message": "What are the return rules for unopened items?", "conversation_history": [{"role": "user", "content": "What are the return rules for unopened items?"}]},
+        {
+            "message": "What are the return rules for unopened items?",
+            "conversation_history": [
+                {"role": "user", "content": "What are the return rules for unopened items?"}
+            ],
+        },
         config=config,
     )
     await graph.ainvoke(
-        {"message": "What did I just ask about?", "conversation_history": [{"role": "user", "content": "What did I just ask about?"}]},
+        {
+            "message": "What did I just ask about?",
+            "conversation_history": [{"role": "user", "content": "What did I just ask about?"}],
+        },
         config=config,
     )
 
@@ -72,6 +112,25 @@ async def test_sql_query_is_cached() -> None:
 
 
 @pytest.mark.asyncio
+async def test_customer_sql_query_uses_customer_scope_and_separate_cache() -> None:
+    repository = FakeRepository()
+    cache = FakeCache()
+    model = FakeModel(defaults("sql"))
+    sql_node = build_nodes(GraphDependencies(model, repository, cache))["sql"]
+
+    employee = await sql_node({"message": "How many copies sold?"})
+    customer = await sql_node({"message": "How many copies did I buy?", "customer_id": 7})
+
+    assert employee["tool_context"] == '[{"copies_sold": 3}]'
+    assert customer["tool_context"] == '[{"copies_sold": 1}]'
+    assert repository.queries == [
+        "SELECT COUNT(*) AS copies_sold FROM orders",
+        "customer:7:SELECT COUNT(*) AS copies_sold FROM orders",
+    ]
+    assert len(cache.values) == 2
+
+
+@pytest.mark.asyncio
 async def test_refund_pauses_then_records_human_approval() -> None:
     repository = FakeRepository()
     model = FakeModel(defaults("refund"))
@@ -86,7 +145,7 @@ async def test_refund_pauses_then_records_human_approval() -> None:
 
 
 def test_sql_schema_rejects_writes() -> None:
-    from support_copilot.db import validate_readonly_sql
+    from support_copilot.db import scope_customer_sql, validate_readonly_sql
 
     with pytest.raises(ValueError):
         validate_readonly_sql("DELETE FROM orders")
@@ -110,3 +169,10 @@ def test_sql_schema_rejects_writes() -> None:
         "WHERE ordered_at >= date_trunc('month', current_date) - INTERVAL '1 month' "
         "AND ordered_at < date_trunc('month', current_date)"
     )
+    scoped = scope_customer_sql(
+        "SELECT c.email, COUNT(*) FROM customers c JOIN orders o ON o.customer_id = c.id "
+        "JOIN products p ON p.id = o.product_id GROUP BY c.email",
+        7,
+    )
+    assert "FROM (SELECT * FROM customers WHERE id = 7) AS c" in scoped
+    assert "JOIN (SELECT * FROM orders WHERE customer_id = 7) AS o" in scoped

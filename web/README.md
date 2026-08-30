@@ -1,6 +1,6 @@
 # Support Copilot console
 
-A small React and TypeScript support console for the portfolio-support-copilot backend. It submits messages, polls individual runs, retains a thread for follow-up messages, and lets a human approve or reject paused refund requests.
+A React and TypeScript console for the portfolio-support-copilot backend. The customer portal looks up a customer by name and email, lists that customer's orders, submits support requests, and polls the customer's runs. The employee console submits messages, retains a thread for follow-up messages, and lets an employee approve or reject paused refund requests. The customer lookup is not authentication.
 
 ## Run locally
 
@@ -18,7 +18,7 @@ Leave `VITE_API_BASE` blank to send `/api` requests through the Vite proxy to `h
 
 ## Mock mode
 
-Run `VITE_MOCK_API=1 npm run dev` to use canned browser-side data for all three views without a backend. Submit a message containing `refund` to create a paused run, then review it in the approval inbox. The mock uses the same current contract as the backend.
+Run `VITE_MOCK_API=1 npm run dev` to use canned browser-side data without a backend. The customer portal accepts `Maya Chen` and `maya@example.test` and shows seeded orders. Submit a message containing `refund` to create a paused run, then review it in the approval inbox. The mock uses the same current contract as the backend.
 
 ## Build and test
 

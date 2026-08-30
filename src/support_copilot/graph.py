@@ -28,6 +28,8 @@ class CacheClient(Protocol):
 class SupportState(TypedDict, total=False):
     run_id: str
     message: str
+    customer_id: int | None
+    selected_order_number: str | None
     extraction: dict[str, Any] | None
     routing: dict[str, Any] | None
     handler: Literal["rag", "sql", "refund"] | None
@@ -53,7 +55,10 @@ def build_nodes(deps: GraphDependencies) -> dict[str, Any]:
             "Extract store-support fields. Do not invent an order number or title. Use only the fixed enum values.",
             state["message"],
         )
-        return {"extraction": extraction.model_dump()}
+        fields = extraction.model_dump()
+        if state.get("customer_id") is not None:
+            fields["order_number"] = state["selected_order_number"]
+        return {"extraction": fields}
 
     async def route(state: SupportState) -> dict[str, Any]:
         if state["extraction"] is None:
@@ -81,10 +86,16 @@ def build_nodes(deps: GraphDependencies) -> dict[str, Any]:
             """Write one PostgreSQL SELECT query for the physical-media store. Available tables are customers(id, email, name), products(id, title, format, sku, price_cents), and orders(order_number, customer_id, product_id, quantity, ordered_at, status, refund_status). Never write data. Use current_date for relative dates.""",
             state["message"],
         )
-        cache_key = "tool:sql:" + hashlib.sha256(plan.sql.encode()).hexdigest()
+        customer_id = state.get("customer_id")
+        cache_scope = f"customer:{customer_id}" if customer_id is not None else "employee"
+        cache_key = f"tool:sql:{cache_scope}:" + hashlib.sha256(plan.sql.encode()).hexdigest()
         cached = await deps.cache.get(cache_key)
         if cached is None:
-            rows = await deps.repository.query_readonly(plan.sql)
+            rows = (
+                await deps.repository.query_customer_readonly(plan.sql, customer_id)
+                if customer_id is not None
+                else await deps.repository.query_readonly(plan.sql)
+            )
             await deps.cache.set(cache_key, json.dumps(rows, default=str), ex=300)
         else:
             rows = json.loads(cached.decode() if isinstance(cached, bytes) else cached)
@@ -111,9 +122,10 @@ def build_nodes(deps: GraphDependencies) -> dict[str, Any]:
 
     async def respond(state: SupportState) -> dict[str, Any]:
         history = state.get("conversation_history", [])[-6:]
-        prior_context = "\n".join(
-            f"{entry['role'].title()}: {entry['content']}" for entry in history[:-1]
-        ) or "No prior messages in this thread."
+        prior_context = (
+            "\n".join(f"{entry['role'].title()}: {entry['content']}" for entry in history[:-1])
+            or "No prior messages in this thread."
+        )
         response = await deps.model.generate(
             "Answer as a concise store support copilot. Use only the supplied evidence and prior thread context. If a refund was rejected, say so plainly. Never claim a real payment was issued.",
             "\n".join(
@@ -125,7 +137,10 @@ def build_nodes(deps: GraphDependencies) -> dict[str, Any]:
                 ]
             ),
         )
-        return {"answer": response, "conversation_history": [{"role": "assistant", "content": response}]}
+        return {
+            "answer": response,
+            "conversation_history": [{"role": "assistant", "content": response}],
+        }
 
     return {
         "extract": extract,

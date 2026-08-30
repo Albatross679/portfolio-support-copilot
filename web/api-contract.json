@@ -1,73 +1,259 @@
 {
   "types": {
     "RunStatus": {
-      "enum": ["queued", "running", "awaiting_approval", "completed", "failed"]
+      "enum": [
+        "queued",
+        "running",
+        "awaiting_approval",
+        "completed",
+        "failed"
+      ]
     },
     "StructuredExtraction": {
       "properties": {
-        "order_number": { "nullable": "string" },
-        "product_title": { "nullable": "string" },
-        "media_format": { "enum": ["Blu-ray", "DVD", "4K UHD", "box set", "unknown"] },
-        "issue_type": { "enum": ["billing", "shipping", "returns", "refund", "damaged_disc", "region_code", "preorder", "sales_query", "general"] },
-        "sentiment": { "enum": ["positive", "neutral", "frustrated", "angry"] }
+        "order_number": {
+          "nullable": "string"
+        },
+        "product_title": {
+          "nullable": "string"
+        },
+        "media_format": {
+          "enum": [
+            "Blu-ray",
+            "DVD",
+            "4K UHD",
+            "box set",
+            "unknown"
+          ]
+        },
+        "issue_type": {
+          "enum": [
+            "billing",
+            "shipping",
+            "returns",
+            "refund",
+            "damaged_disc",
+            "region_code",
+            "preorder",
+            "sales_query",
+            "general"
+          ]
+        },
+        "sentiment": {
+          "enum": [
+            "positive",
+            "neutral",
+            "frustrated",
+            "angry"
+          ]
+        }
       },
       "required": []
     },
     "SupportRoute": {
       "properties": {
-        "lane": { "enum": ["billing", "shipping", "returns", "general"] },
-        "handler": { "enum": ["rag", "sql", "refund"] },
+        "lane": {
+          "enum": [
+            "billing",
+            "shipping",
+            "returns",
+            "general"
+          ]
+        },
+        "handler": {
+          "enum": [
+            "rag",
+            "sql",
+            "refund"
+          ]
+        },
         "rationale": "string"
       },
-      "required": ["lane", "handler", "rationale"]
+      "required": [
+        "lane",
+        "handler",
+        "rationale"
+      ]
     },
     "ProposedRefund": {
       "properties": {
         "order_number": "string",
         "amount_cents": "integer",
-        "currency": { "enum": ["USD"] },
+        "currency": {
+          "enum": [
+            "USD"
+          ]
+        },
         "reason": "string"
       },
-      "required": ["order_number", "amount_cents", "reason"]
+      "required": [
+        "order_number",
+        "amount_cents",
+        "reason"
+      ]
     },
     "SupportRun": {
       "properties": {
         "run_id": "string",
         "thread_id": "string",
-        "status": { "ref": "RunStatus" },
-        "extraction": { "nullable": { "ref": "StructuredExtraction" } },
-        "route": { "nullable": { "ref": "SupportRoute" } },
-        "proposed_refund": { "nullable": { "ref": "ProposedRefund" } },
-        "answer": { "nullable": "string" },
-        "error": { "nullable": "string" }
+        "status": {
+          "ref": "RunStatus"
+        },
+        "extraction": {
+          "nullable": {
+            "ref": "StructuredExtraction"
+          }
+        },
+        "route": {
+          "nullable": {
+            "ref": "SupportRoute"
+          }
+        },
+        "proposed_refund": {
+          "nullable": {
+            "ref": "ProposedRefund"
+          }
+        },
+        "answer": {
+          "nullable": "string"
+        },
+        "error": {
+          "nullable": "string"
+        }
       },
-      "required": ["run_id", "thread_id", "status"]
+      "required": [
+        "run_id",
+        "thread_id",
+        "status"
+      ]
     },
     "CreateRunRequest": {
       "properties": {
         "message": "string",
-        "thread_id": { "nullable": "string" }
+        "thread_id": {
+          "nullable": "string"
+        },
+        "customer": {
+          "nullable": {
+            "ref": "CustomerIdentity"
+          }
+        },
+        "order_number": {
+          "nullable": "string"
+        }
       },
-      "required": ["message"]
+      "required": [
+        "message"
+      ]
     },
     "CreateRunResponse": {
       "properties": {
         "run_id": "string",
         "thread_id": "string"
       },
-      "required": ["run_id", "thread_id"]
+      "required": [
+        "run_id",
+        "thread_id"
+      ]
     },
     "DecisionRequest": {
       "properties": {
-        "decision": { "enum": ["approve", "reject"] }
+        "decision": {
+          "enum": [
+            "approve",
+            "reject"
+          ]
+        }
       },
-      "required": ["decision"]
+      "required": [
+        "decision"
+      ]
     },
     "RunListResponse": {
       "properties": {
-        "runs": { "array": { "ref": "SupportRun" } }
+        "runs": {
+          "array": {
+            "ref": "SupportRun"
+          }
+        }
       },
-      "required": ["runs"]
+      "required": [
+        "runs"
+      ]
+    },
+    "CustomerIdentity": {
+      "properties": {
+        "id": "integer",
+        "name": "string",
+        "email": "string"
+      },
+      "required": [
+        "id",
+        "name",
+        "email"
+      ]
+    },
+    "CustomerIdentificationRequest": {
+      "properties": {
+        "name": "string",
+        "email": "string"
+      },
+      "required": [
+        "name",
+        "email"
+      ]
+    },
+    "CustomerIdentificationResponse": {
+      "properties": {
+        "customer": {
+          "nullable": {
+            "ref": "CustomerIdentity"
+          }
+        }
+      },
+      "required": []
+    },
+    "RefundProgress": {
+      "enum": [
+        "none",
+        "awaiting_approval",
+        "approved",
+        "rejected"
+      ]
+    },
+    "CustomerOrder": {
+      "properties": {
+        "order_number": "string",
+        "title": "string",
+        "media_format": "string",
+        "quantity": "integer",
+        "ordered_at": "string",
+        "status": "string",
+        "refund_progress": {
+          "ref": "RefundProgress"
+        }
+      },
+      "required": [
+        "order_number",
+        "title",
+        "media_format",
+        "quantity",
+        "ordered_at",
+        "status",
+        "refund_progress"
+      ]
+    },
+    "CustomerOrderList": {
+      "properties": {
+        "orders": {
+          "array": {
+            "ref": "CustomerOrder"
+          }
+        }
+      },
+      "required": [
+        "orders"
+      ]
     }
   }
 }
