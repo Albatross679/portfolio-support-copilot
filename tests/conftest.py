@@ -35,6 +35,12 @@ class FakeRepository:
         self.queries.append(sql)
         return [{"copies_sold": 3}]
 
+    async def query_customer_readonly(
+        self, sql: str, customer_id: int
+    ) -> list[dict[str, Any]]:
+        self.queries.append(f"customer:{customer_id}:{sql}")
+        return [{"copies_sold": 1}]
+
     async def refund_proposal(self, order_number: str | None, reason: str) -> RefundProposal:
         return RefundProposal(
             order_number=order_number or "unknown", amount_cents=2999, reason=reason

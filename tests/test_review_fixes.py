@@ -231,6 +231,9 @@ async def test_list_runs_filters_awaiting_approval() -> None:
 @pytest.mark.asyncio
 async def test_customer_lookup_orders_and_scoped_run_access() -> None:
     repository = FakeCustomerRepository()
+    repository.orders[0] = repository.orders[0].model_copy(
+        update={"refund_progress": "approved"}
+    )
     redis = FakeRedis({"run_id": "run-paused", "thread_id": "thread-1", "status": "queued"})
     redis.values["run:run-paused"] = json.dumps(
         {

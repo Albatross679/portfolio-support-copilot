@@ -56,7 +56,7 @@ def build_nodes(deps: GraphDependencies) -> dict[str, Any]:
             state["message"],
         )
         fields = extraction.model_dump()
-        if state.get("selected_order_number"):
+        if state.get("customer_id") is not None:
             fields["order_number"] = state["selected_order_number"]
         return {"extraction": fields}
 
@@ -86,10 +86,16 @@ def build_nodes(deps: GraphDependencies) -> dict[str, Any]:
             """Write one PostgreSQL SELECT query for the physical-media store. Available tables are customers(id, email, name), products(id, title, format, sku, price_cents), and orders(order_number, customer_id, product_id, quantity, ordered_at, status, refund_status). Never write data. Use current_date for relative dates.""",
             state["message"],
         )
-        cache_key = "tool:sql:" + hashlib.sha256(plan.sql.encode()).hexdigest()
+        customer_id = state.get("customer_id")
+        cache_scope = f"customer:{customer_id}" if customer_id is not None else "employee"
+        cache_key = f"tool:sql:{cache_scope}:" + hashlib.sha256(plan.sql.encode()).hexdigest()
         cached = await deps.cache.get(cache_key)
         if cached is None:
-            rows = await deps.repository.query_readonly(plan.sql)
+            rows = (
+                await deps.repository.query_customer_readonly(plan.sql, customer_id)
+                if customer_id is not None
+                else await deps.repository.query_readonly(plan.sql)
+            )
             await deps.cache.set(cache_key, json.dumps(rows, default=str), ex=300)
         else:
             rows = json.loads(cached.decode() if isinstance(cached, bytes) else cached)

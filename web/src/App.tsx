@@ -76,7 +76,8 @@ export default function App() {
         <a className="brand" href="/" onClick={(event) => { event.preventDefault(); navigate("/"); }}>Support Copilot</a>
         <nav aria-label="Main navigation">
           <a href="/" className={customerActive ? "active" : ""} onClick={(event) => { event.preventDefault(); navigate("/"); }}>Customer portal</a>
-          <a href="/employee" className={path === "/employee" || path === "/approvals" || Boolean(runId) ? "active" : ""} onClick={(event) => { event.preventDefault(); navigate("/employee"); }}>Employee console</a>
+          <a href="/employee" className={path === "/employee" || Boolean(runId) ? "active" : ""} onClick={(event) => { event.preventDefault(); navigate("/employee"); }}>Employee console</a>
+          <a href="/approvals" className={path === "/approvals" ? "active" : ""} onClick={(event) => { event.preventDefault(); navigate("/approvals"); }}>Approval inbox</a>
         </nav>
       </header>
       {view}

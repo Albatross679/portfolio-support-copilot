@@ -88,6 +88,15 @@ class StoreRepository:
 
     async def query_readonly(self, sql: str) -> list[dict[str, Any]]:
         validate_readonly_sql(sql)
+        return await self._execute_readonly(sql)
+
+    async def query_customer_readonly(
+        self, sql: str, customer_id: int
+    ) -> list[dict[str, Any]]:
+        validate_readonly_sql(sql)
+        return await self._execute_readonly(scope_customer_sql(sql, customer_id))
+
+    async def _execute_readonly(self, sql: str) -> list[dict[str, Any]]:
         async with self.pool.connection() as conn:
             async with conn.transaction():
                 await conn.execute("SET TRANSACTION READ ONLY")
@@ -163,6 +172,26 @@ def validate_readonly_sql(sql: str) -> None:
     functions = called_function_names(statement)
     if not functions.issubset(ALLOWED_FUNCTIONS):
         raise ValueError("Query contains a function that is not permitted")
+
+
+def scope_customer_sql(sql: str, customer_id: int) -> str:
+    statement = parse(sql.strip(), read="postgres")[0]
+    for table in list(statement.find_all(exp.Table)):
+        table_name = table.name.lower()
+        restricted_column = {"customers": "id", "orders": "customer_id"}.get(table_name)
+        if restricted_column is None:
+            continue
+        alias = table.alias_or_name
+        source = table.copy()
+        source.set("alias", None)
+        restricted = (
+            exp.select("*")
+            .from_(source)
+            .where(exp.column(restricted_column).eq(exp.Literal.number(customer_id)))
+            .subquery(alias)
+        )
+        table.replace(restricted)
+    return statement.sql(dialect="postgres")
 
 
 def called_function_names(statement: exp.Query) -> set[str]:

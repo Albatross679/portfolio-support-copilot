@@ -110,7 +110,7 @@ async def list_customer_orders(
         orders=[
             order.model_copy(
                 update={"refund_progress": "awaiting_approval"}
-                if order.order_number in awaiting_approval and order.refund_progress == "none"
+                if order.order_number in awaiting_approval
                 else {}
             )
             for order in orders
