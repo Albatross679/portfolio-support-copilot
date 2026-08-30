@@ -15,7 +15,8 @@ export function ApprovalInboxView({ client = api, onOpenRun }: ApprovalInboxView
 
   const loadRuns = useCallback(async () => {
     try {
-      const result = await client.listRuns("awaiting_approval");
+      // The demo store will not have 100 simultaneous paused runs, so the inbox does not paginate.
+      const result = await client.listRuns("awaiting_approval", 100);
       setRuns(result.runs);
       setError("");
     } catch (cause) {

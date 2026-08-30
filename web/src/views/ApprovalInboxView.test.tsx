@@ -6,9 +6,12 @@ import { ApprovalInboxView } from "./ApprovalInboxView";
 
 it("lists paused mock runs and approves one", async () => {
   const user = userEvent.setup();
-  render(<ApprovalInboxView client={createMockApi()} onOpenRun={vi.fn()} />);
+  const client = createMockApi();
+  const listRuns = vi.spyOn(client, "listRuns");
+  render(<ApprovalInboxView client={client} onOpenRun={vi.fn()} />);
 
   expect(await screen.findByText("run_refund_2048")).toBeInTheDocument();
+  expect(listRuns).toHaveBeenCalledWith("awaiting_approval", 100);
   await user.click(screen.getByRole("button", { name: "Approve refund" }));
 
   expect(await screen.findByText("No runs are awaiting approval.")).toBeInTheDocument();

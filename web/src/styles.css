@@ -7,7 +7,7 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; }
-button, input, select, textarea { font: inherit; }
+button, textarea, input, select { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: wait; opacity: 0.65; }
 
@@ -27,12 +27,12 @@ h1 { color: #173d42; font-size: clamp(2rem, 4vw, 3rem); letter-spacing: -0.055em
 h2 { color: #173d42; font-size: 1rem; margin: 0 0 16px; }
 p { color: #536164; line-height: 1.58; margin: 0; }
 
-.message-form, .run-details, .inbox-item { background: #fff; border: 1px solid #dce0da; border-radius: 10px; box-shadow: 0 8px 24px rgb(22 54 57 / 0.04); }
+.message-form, .run-details, .inbox-item, .table-card { background: #fff; border: 1px solid #dce0da; border-radius: 10px; box-shadow: 0 8px 24px rgb(22 54 57 / 0.04); }
 .message-form { display: grid; gap: 11px; padding: 28px; }
 label { color: #173d42; font-size: 0.9rem; font-weight: 700; }
-input, select, textarea { border: 1px solid #b9c5c1; border-radius: 6px; color: #1e2930; line-height: 1.5; padding: 12px; }
-textarea { resize: vertical; }
-input:focus, select:focus, textarea:focus { border-color: #286a6c; box-shadow: 0 0 0 3px rgb(40 106 108 / 0.15); outline: 0; }
+textarea, input, select { border: 1px solid #b9c5c1; border-radius: 6px; color: #1e2930; line-height: 1.5; padding: 9px 10px; }
+textarea { padding: 12px; resize: vertical; }
+textarea:focus, input:focus, select:focus { border-color: #286a6c; box-shadow: 0 0 0 3px rgb(40 106 108 / 0.15); outline: 0; }
 button { background: #173d42; border: 1px solid #173d42; border-radius: 6px; color: #fff; font-size: 0.9rem; font-weight: 700; padding: 10px 14px; width: fit-content; }
 button:hover:not(:disabled) { background: #0f2e32; }
 .secondary-button { background: transparent; color: #173d42; }
@@ -66,6 +66,7 @@ dd { color: #1e2930; margin: 0; }
 .button-row { border-top: 1px solid #e6e9e5; display: flex; flex-wrap: wrap; gap: 10px; padding: 18px 27px; }
 .follow-up-button, .follow-up-note { margin-top: 16px; }
 .follow-up-note { font-size: 0.9rem; }
+
 .orders-section, .support-request { margin-top: 34px; }
 .order-list { display: grid; gap: 12px; }
 .order-card { background: #fff; border: 1px solid #dce0da; border-radius: 10px; display: grid; gap: 18px; grid-template-columns: minmax(180px, 0.9fr) minmax(0, 1.6fr); padding: 20px; }
@@ -78,12 +79,29 @@ dd { color: #1e2930; margin: 0; }
 .refund-approved { color: #28745c; font-weight: 700; }
 .refund-rejected { color: #8b2c21; font-weight: 700; }
 
+.employee-nav { border-bottom: 1px solid #d9ddd7; display: flex; gap: 18px; }
+.employee-nav a { color: #536164; font-size: 0.88rem; padding: 14px 0; text-decoration: none; }
+.employee-nav a.active, .employee-nav a:hover { color: #173d42; font-weight: 700; }
+.table-card { overflow-x: auto; padding: 20px; }
+table { border-collapse: collapse; font-size: 0.88rem; width: 100%; }
+th, td { border-bottom: 1px solid #e6e9e5; padding: 11px 10px; text-align: left; vertical-align: top; }
+th { color: #536164; font-size: 0.76rem; text-transform: uppercase; }
+td code { font-size: 0.78rem; }
+.pagination, .tab-list { align-items: center; display: flex; gap: 12px; margin-top: 18px; }
+.tab-list { margin: 0 0 18px; }
+.selected-tab { background: #286a6c; border-color: #286a6c; }
+.data-layout { display: grid; gap: 20px; grid-template-columns: minmax(0, 1.7fr) minmax(250px, 0.8fr); }
+.edit-form { align-self: start; }
+.edit-form label { display: grid; gap: 6px; }
+.action-cell { white-space: nowrap; }
+.danger-text { color: #a33526; margin-left: 10px; }
+
 @media (max-width: 650px) {
   .app-shell { padding-inline: 16px; }
   .site-header { align-items: flex-start; flex-direction: column; padding: 18px 0 0; }
   nav a { padding: 16px 0 14px; }
   .page { padding-top: 40px; }
-  .inline-intro, .detail-grid, .order-card { align-items: flex-start; display: flex; flex-direction: column; }
-  .order-card dl { display: grid; grid-template-columns: 1fr; width: 100%; }
+  .inline-intro, .detail-grid { align-items: flex-start; display: flex; flex-direction: column; }
+  .data-layout { grid-template-columns: 1fr; }
   .run-summary { gap: 24px; }
 }

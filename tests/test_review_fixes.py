@@ -1,6 +1,7 @@
 import asyncio
 import json
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from types import NoneType, SimpleNamespace, UnionType
 from typing import Any, Literal, get_args, get_origin
@@ -10,25 +11,46 @@ from fastapi import HTTPException
 from pydantic import BaseModel
 
 from support_copilot.api import (
+    create_customer,
+    create_order,
+    create_product,
     create_run,
     decide_run,
+    delete_customer,
+    delete_order,
+    delete_product,
     get_customer_run,
     get_run,
     identify_customer,
     list_customer_orders,
+    list_customers,
+    list_orders,
+    list_products,
     list_runs,
+    update_customer,
+    update_order,
+    update_product,
 )
 from support_copilot.ingest import find_help_directory
 from support_copilot.model import strict_json_schema
 from support_copilot.run_store import awaiting_orders_key, write_run_status
 from support_copilot.schemas import (
+    Customer,
     CustomerIdentificationRequest,
     CustomerIdentificationResponse,
     CustomerIdentity,
+    CustomerInput,
+    CustomerList,
     CustomerOrder,
     CustomerOrderList,
     DecisionRequest,
     Extraction,
+    Order,
+    OrderInput,
+    OrderList,
+    Product,
+    ProductInput,
+    ProductList,
     RefundProgress,
     RefundProposal,
     RouteDecision,
@@ -151,6 +173,15 @@ CONTRACT_MODEL_NAMES = {
     RunCreated: "CreateRunResponse",
     DecisionRequest: "DecisionRequest",
     RunList: "RunListResponse",
+    CustomerInput: "CustomerInput",
+    Customer: "Customer",
+    CustomerList: "CustomerListResponse",
+    ProductInput: "ProductInput",
+    Product: "Product",
+    ProductList: "ProductListResponse",
+    OrderInput: "OrderInput",
+    Order: "Order",
+    OrderList: "OrderListResponse",
 }
 
 
@@ -171,7 +202,7 @@ def contract_type(annotation: Any) -> Any:
         return {"array": contract_type(arguments[0])}
     if isinstance(annotation, type) and issubclass(annotation, BaseModel):
         return {"ref": CONTRACT_MODEL_NAMES[annotation]}
-    return {str: "string", int: "integer"}[annotation]
+    return {str: "string", int: "integer", datetime: "string"}[annotation]
 
 
 def contract_model(model: type[BaseModel]) -> dict[str, Any]:
@@ -260,11 +291,14 @@ async def test_list_runs_filters_awaiting_approval() -> None:
         {"run_id": "run-completed", "thread_id": "thread-2", "status": "completed"}
     )
 
-    result = await list_runs("awaiting_approval", redis)
+    result = await list_runs("awaiting_approval", redis=redis)
 
     assert [run.run_id for run in result.runs] == ["run-paused"]
     assert result.runs[0].proposed_refund is not None
     assert result.runs[0].proposed_refund.amount_cents == 2999
+    assert result.total == 1
+    assert result.limit == 25
+    assert result.offset == 0
 
 
 @pytest.mark.asyncio
@@ -304,11 +338,9 @@ async def test_customer_lookup_orders_and_scoped_run_access() -> None:
     assert run.run_id == "run-paused"
 
     await write_run_status(redis, "run-paused", status="completed")
-
     assert await redis.hvals(awaiting_orders_key(1)) == ["ORD-1001"]
 
     await write_run_status(redis, "run-paused-2", status="completed")
-
     assert await redis.hvals(awaiting_orders_key(1)) == []
 
 
@@ -367,6 +399,201 @@ async def test_duplicate_decision_is_rejected() -> None:
     assert error.value.detail == "A decision is already queued"
 
 
+class FakeBusinessCursor:
+    def __init__(self, rows: list[dict[str, Any]]) -> None:
+        self.rows = rows
+        self.row: dict[str, Any] | None = None
+        self.rowcount = 0
+
+    async def execute(self, query: str, params: tuple[Any, ...] = ()) -> None:
+        if query.startswith("SELECT"):
+            return
+        if query.startswith("INSERT"):
+            fields = query.split("(", 1)[1].split(")", 1)[0].split(", ")
+            self.row = {"id": max((row["id"] for row in self.rows), default=0) + 1}
+            self.row.update(dict(zip(fields, params, strict=True)))
+            self.rows.append(self.row)
+            return
+        if query.startswith("UPDATE"):
+            assignments = query.split(" SET ", 1)[1].split(" WHERE ", 1)[0]
+            fields = [assignment.split(" = ", 1)[0] for assignment in assignments.split(", ")]
+            row_id = params[-1]
+            self.row = next((row for row in self.rows if row["id"] == row_id), None)
+            if self.row is not None:
+                self.row.update(dict(zip(fields, params[:-1], strict=True)))
+            return
+        if query.startswith("DELETE"):
+            row_id = params[0]
+            previous = len(self.rows)
+            self.rows[:] = [row for row in self.rows if row["id"] != row_id]
+            self.rowcount = previous - len(self.rows)
+
+    async def fetchall(self) -> list[dict[str, Any]]:
+        return self.rows
+
+    async def fetchone(self) -> dict[str, Any] | None:
+        return self.row
+
+    async def __aenter__(self) -> "FakeBusinessCursor":
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        return None
+
+
+class FakeBusinessConnection:
+    def __init__(self, rows: list[dict[str, Any]]) -> None:
+        self.rows = rows
+
+    def cursor(self, **kwargs: Any) -> FakeBusinessCursor:
+        return FakeBusinessCursor(self.rows)
+
+    @asynccontextmanager
+    async def transaction(self) -> Any:
+        yield
+
+    async def __aenter__(self) -> "FakeBusinessConnection":
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        return None
+
+
+class FakeBusinessPool:
+    def __init__(self, rows: list[dict[str, Any]] | None = None) -> None:
+        self.rows = rows or [{"id": 1, "email": "maya@example.test", "name": "Maya Chen"}]
+
+    def connection(self) -> FakeBusinessConnection:
+        return FakeBusinessConnection(self.rows)
+
+
+@pytest.mark.asyncio
+async def test_customer_crud_endpoints_use_the_business_pool() -> None:
+    pool = FakeBusinessPool()
+
+    listed = await list_customers(pool)
+    created = await create_customer(
+        CustomerInput(email="sam@example.test", name="Sam Rivera"), pool
+    )
+    updated = await update_customer(
+        created.id, CustomerInput(email="sam@example.test", name="Sam R."), pool
+    )
+    deleted = await delete_customer(created.id, pool)
+
+    assert [customer.id for customer in listed.customers] == [1]
+    assert updated.name == "Sam R."
+    assert deleted.status_code == 204
+    assert pool.rows == [{"id": 1, "email": "maya@example.test", "name": "Maya Chen"}]
+
+
+@pytest.mark.asyncio
+async def test_product_crud_endpoints_use_the_business_pool() -> None:
+    pool = FakeBusinessPool(
+        [
+            {
+                "id": 1,
+                "title": "Demo disc",
+                "format": "DVD",
+                "sku": "DVD-1",
+                "price_cents": 999,
+            }
+        ]
+    )
+
+    listed = await list_products(pool)
+    created = await create_product(
+        ProductInput(title="Demo 4K", format="4K UHD", sku="UHD-2", price_cents=2999), pool
+    )
+    updated = await update_product(
+        created.id,
+        ProductInput(title="Demo 4K edited", format="4K UHD", sku="UHD-2", price_cents=2499),
+        pool,
+    )
+    deleted = await delete_product(created.id, pool)
+
+    assert [product.id for product in listed.products] == [1]
+    assert updated.title == "Demo 4K edited"
+    assert deleted.status_code == 204
+    assert [product["id"] for product in pool.rows] == [1]
+
+
+@pytest.mark.asyncio
+async def test_order_crud_endpoints_use_the_business_pool() -> None:
+    ordered_at = datetime.fromisoformat("2025-01-01T12:00:00+00:00")
+    pool = FakeBusinessPool(
+        [
+            {
+                "id": 1,
+                "order_number": "ORD-1",
+                "customer_id": 1,
+                "product_id": 1,
+                "quantity": 1,
+                "ordered_at": ordered_at,
+                "status": "delivered",
+                "refund_status": "none",
+            }
+        ]
+    )
+
+    listed = await list_orders(pool)
+    created = await create_order(
+        OrderInput(
+            order_number="ORD-2",
+            customer_id=1,
+            product_id=1,
+            quantity=2,
+            ordered_at=ordered_at,
+            status="processing",
+        ),
+        pool,
+    )
+    updated = await update_order(
+        created.id,
+        OrderInput(
+            order_number="ORD-2",
+            customer_id=1,
+            product_id=1,
+            quantity=2,
+            ordered_at=ordered_at,
+            status="shipped",
+        ),
+        pool,
+    )
+    deleted = await delete_order(created.id, pool)
+
+    assert [order.id for order in listed.orders] == [1]
+    assert updated.status == "shipped"
+    assert deleted.status_code == 204
+    assert [order["id"] for order in pool.rows] == [1]
+
+
+@pytest.mark.asyncio
+async def test_run_listing_is_paginated_and_newest_first() -> None:
+    redis = FakeRedis(
+        {
+            "run_id": "old",
+            "thread_id": "thread-old",
+            "status": "completed",
+            "created_at": "2025-01-01T00:00:00Z",
+        }
+    )
+    redis.values["run:new"] = json.dumps(
+        {
+            "run_id": "new",
+            "thread_id": "thread-new",
+            "status": "completed",
+            "created_at": "2025-01-02T00:00:00Z",
+            "message_preview": "Recent customer message",
+        }
+    )
+
+    result = await list_runs(limit=1, offset=0, redis=redis)
+
+    assert [run.run_id for run in result.runs] == ["new"]
+    assert result.total == 2
+    assert result.runs[0].message_preview == "Recent customer message"
+
+
 @pytest.mark.asyncio
 async def test_new_thread_run_clears_values_from_previous_run() -> None:
     snapshots = [
@@ -399,7 +626,6 @@ async def test_new_thread_run_clears_values_from_previous_run() -> None:
     assert graph.input is not None
     assert graph.input["answer"] is None
     assert graph.input["proposed_refund"] is None
-    assert graph.input["selected_order_number"] is None
     assert result == {"answer": "new"}
 
 

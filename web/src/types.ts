@@ -2,27 +2,21 @@ import contract from "../api-contract.json";
 import type {
   CreateRunRequest,
   CreateRunResponse,
+  Customer,
   CustomerIdentificationRequest,
   CustomerIdentificationResponse,
   CustomerIdentity,
+  CustomerInput,
+  CustomerListResponse,
   CustomerOrder,
   CustomerOrderList,
   DecisionRequest,
-  RunListResponse,
-  RunStatus,
-  SupportRun,
-} from "./generated/api-contract";
-
-export const apiContract = contract;
-export type {
-  CreateRunRequest,
-  CreateRunResponse,
-  CustomerIdentificationRequest,
-  CustomerIdentificationResponse,
-  CustomerIdentity,
-  CustomerOrder,
-  CustomerOrderList,
-  DecisionRequest,
+  Order,
+  OrderInput,
+  OrderListResponse,
+  Product,
+  ProductInput,
+  ProductListResponse,
   ProposedRefund,
   RunListResponse,
   RunStatus,
@@ -31,14 +25,53 @@ export type {
   SupportRun,
 } from "./generated/api-contract";
 
+export const apiContract = contract;
+export type {
+  CreateRunRequest,
+  CreateRunResponse,
+  Customer,
+  CustomerIdentificationRequest,
+  CustomerIdentificationResponse,
+  CustomerIdentity,
+  CustomerInput,
+  CustomerListResponse,
+  CustomerOrder,
+  CustomerOrderList,
+  DecisionRequest,
+  Order,
+  OrderInput,
+  OrderListResponse,
+  Product,
+  ProductInput,
+  ProductListResponse,
+  ProposedRefund,
+  RunListResponse,
+  RunStatus,
+  StructuredExtraction,
+  SupportRoute,
+  SupportRun,
+};
+
 export type DecisionResponse = SupportRun;
 
 export interface SupportApi {
   createRun(request: CreateRunRequest): Promise<CreateRunResponse>;
   getRun(runId: string): Promise<SupportRun>;
-  listRuns(status?: RunStatus): Promise<RunListResponse>;
+  listRuns(status?: RunStatus, limit?: number, offset?: number): Promise<RunListResponse>;
   decideRun(runId: string, request: DecisionRequest): Promise<DecisionResponse>;
   identifyCustomer(request: CustomerIdentificationRequest): Promise<CustomerIdentificationResponse>;
   listCustomerOrders(customer: CustomerIdentity): Promise<CustomerOrderList>;
   getCustomerRun(customer: CustomerIdentity, runId: string): Promise<SupportRun>;
+  listCustomers(): Promise<CustomerListResponse>;
+  createCustomer(request: CustomerInput): Promise<Customer>;
+  updateCustomer(id: number, request: CustomerInput): Promise<Customer>;
+  deleteCustomer(id: number): Promise<void>;
+  listProducts(): Promise<ProductListResponse>;
+  createProduct(request: ProductInput): Promise<Product>;
+  updateProduct(id: number, request: ProductInput): Promise<Product>;
+  deleteProduct(id: number): Promise<void>;
+  listOrders(): Promise<OrderListResponse>;
+  createOrder(request: OrderInput): Promise<Order>;
+  updateOrder(id: number, request: OrderInput): Promise<Order>;
+  deleteOrder(id: number): Promise<void>;
 }

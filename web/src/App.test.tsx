@@ -8,11 +8,12 @@ describe("App navigation", () => {
   });
 
   it("keeps the employee approval inbox accessible", () => {
+    window.history.replaceState({}, "", "/employees");
     render(<App />);
 
     expect(screen.getByRole("link", { name: "Approval inbox" })).toHaveAttribute(
       "href",
-      "/approvals",
+      "/employees/approvals",
     );
   });
 });

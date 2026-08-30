@@ -9,6 +9,80 @@
         "failed"
       ]
     },
+    "RefundProgress": {
+      "enum": [
+        "none",
+        "awaiting_approval",
+        "approved",
+        "rejected"
+      ]
+    },
+    "CustomerIdentity": {
+      "properties": {
+        "id": "integer",
+        "name": "string",
+        "email": "string"
+      },
+      "required": [
+        "id",
+        "name",
+        "email"
+      ]
+    },
+    "CustomerIdentificationRequest": {
+      "properties": {
+        "name": "string",
+        "email": "string"
+      },
+      "required": [
+        "name",
+        "email"
+      ]
+    },
+    "CustomerIdentificationResponse": {
+      "properties": {
+        "customer": {
+          "nullable": {
+            "ref": "CustomerIdentity"
+          }
+        }
+      },
+      "required": []
+    },
+    "CustomerOrder": {
+      "properties": {
+        "order_number": "string",
+        "title": "string",
+        "media_format": "string",
+        "quantity": "integer",
+        "ordered_at": "string",
+        "status": "string",
+        "refund_progress": {
+          "ref": "RefundProgress"
+        }
+      },
+      "required": [
+        "order_number",
+        "title",
+        "media_format",
+        "quantity",
+        "ordered_at",
+        "status",
+        "refund_progress"
+      ]
+    },
+    "CustomerOrderList": {
+      "properties": {
+        "orders": {
+          "array": {
+            "ref": "CustomerOrder"
+          }
+        }
+      },
+      "required": [
+        "orders"
+      ]
+    },
     "StructuredExtraction": {
       "properties": {
         "order_number": {
@@ -99,6 +173,12 @@
         "status": {
           "ref": "RunStatus"
         },
+        "created_at": {
+          "nullable": "string"
+        },
+        "message_preview": {
+          "nullable": "string"
+        },
         "extraction": {
           "nullable": {
             "ref": "StructuredExtraction"
@@ -175,79 +255,165 @@
           "array": {
             "ref": "SupportRun"
           }
-        }
+        },
+        "total": "integer",
+        "limit": "integer",
+        "offset": "integer"
       },
       "required": [
-        "runs"
+        "runs",
+        "total",
+        "limit",
+        "offset"
       ]
     },
-    "CustomerIdentity": {
+    "CustomerInput": {
       "properties": {
-        "id": "integer",
+        "email": "string",
+        "name": "string"
+      },
+      "required": [
+        "email",
+        "name"
+      ]
+    },
+    "Customer": {
+      "properties": {
+        "email": "string",
         "name": "string",
-        "email": "string"
+        "id": "integer"
       },
       "required": [
-        "id",
+        "email",
         "name",
-        "email"
+        "id"
       ]
     },
-    "CustomerIdentificationRequest": {
+    "CustomerListResponse": {
       "properties": {
-        "name": "string",
-        "email": "string"
-      },
-      "required": [
-        "name",
-        "email"
-      ]
-    },
-    "CustomerIdentificationResponse": {
-      "properties": {
-        "customer": {
-          "nullable": {
-            "ref": "CustomerIdentity"
+        "customers": {
+          "array": {
+            "ref": "Customer"
           }
         }
       },
-      "required": []
-    },
-    "RefundProgress": {
-      "enum": [
-        "none",
-        "awaiting_approval",
-        "approved",
-        "rejected"
+      "required": [
+        "customers"
       ]
     },
-    "CustomerOrder": {
+    "ProductInput": {
+      "properties": {
+        "title": "string",
+        "format": {
+          "enum": [
+            "Blu-ray",
+            "DVD",
+            "4K UHD",
+            "box set"
+          ]
+        },
+        "sku": "string",
+        "price_cents": "integer"
+      },
+      "required": [
+        "title",
+        "format",
+        "sku",
+        "price_cents"
+      ]
+    },
+    "Product": {
+      "properties": {
+        "title": "string",
+        "format": {
+          "enum": [
+            "Blu-ray",
+            "DVD",
+            "4K UHD",
+            "box set"
+          ]
+        },
+        "sku": "string",
+        "price_cents": "integer",
+        "id": "integer"
+      },
+      "required": [
+        "title",
+        "format",
+        "sku",
+        "price_cents",
+        "id"
+      ]
+    },
+    "ProductListResponse": {
+      "properties": {
+        "products": {
+          "array": {
+            "ref": "Product"
+          }
+        }
+      },
+      "required": [
+        "products"
+      ]
+    },
+    "OrderInput": {
       "properties": {
         "order_number": "string",
-        "title": "string",
-        "media_format": "string",
+        "customer_id": "integer",
+        "product_id": "integer",
         "quantity": "integer",
         "ordered_at": "string",
         "status": "string",
-        "refund_progress": {
-          "ref": "RefundProgress"
+        "refund_status": {
+          "enum": [
+            "none",
+            "approved",
+            "rejected"
+          ]
         }
       },
       "required": [
         "order_number",
-        "title",
-        "media_format",
+        "customer_id",
+        "product_id",
+        "quantity",
+        "ordered_at",
+        "status"
+      ]
+    },
+    "Order": {
+      "properties": {
+        "order_number": "string",
+        "customer_id": "integer",
+        "product_id": "integer",
+        "quantity": "integer",
+        "ordered_at": "string",
+        "status": "string",
+        "refund_status": {
+          "enum": [
+            "none",
+            "approved",
+            "rejected"
+          ]
+        },
+        "id": "integer"
+      },
+      "required": [
+        "order_number",
+        "customer_id",
+        "product_id",
         "quantity",
         "ordered_at",
         "status",
-        "refund_progress"
+        "id"
       ]
     },
-    "CustomerOrderList": {
+    "OrderListResponse": {
       "properties": {
         "orders": {
           "array": {
-            "ref": "CustomerOrder"
+            "ref": "Order"
           }
         }
       },

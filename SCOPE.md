@@ -49,16 +49,12 @@ One stateful LangGraph graph. A message enters and flows through nodes:
 
 The graph does not run inside the web request. The flow is:
 
-1. The customer portal looks up a name and email and reads only that customer's orders.
-   This lookup is not authentication.
-2. `POST /runs` accepts the message and optional matched customer and selected order. It
-   puts a job on a Redis queue via arq and returns a `run_id` immediately.
-3. A separate worker process pulls the job off the queue and runs the graph. In customer
-   SQL queries, references to customer and order tables are restricted to the matched id.
-4. Customer run reads confirm the same customer lookup pair and customer id. Employee
-   run reads use `GET /runs/{run_id}`. A paused run returns `awaiting_approval` with the
-   proposed refund.
-5. `POST /runs/{run_id}/decision` resumes the graph with the human's approve or reject.
+1. `POST /runs` accepts the message, puts a job on a Redis queue via arq, and returns
+   a `run_id` immediately.
+2. A separate worker process pulls the job off the queue and runs the graph.
+3. `GET /runs/{run_id}` returns the current status. When the graph is paused it returns
+   `awaiting_approval` along with the proposed refund.
+4. `POST /runs/{run_id}/decision` resumes the graph with the human's approve or reject.
 
 ## Data layer
 
@@ -82,15 +78,15 @@ Two data services total: Postgres and Redis.
 
 ## Frontend
 
-A focused console in React and TypeScript with separate customer and employee entry points:
+A React and TypeScript console split into customer and employee areas:
 
-- Customer portal: matches a name and email, lists that customer's orders, submits a
-  support message about one order or a general question, and watches that customer's run.
-- Employee console: submits a support message and retains a thread for follow-up messages.
-- Run view: polls the customer-specific or employee endpoint and shows the structured
-  extraction, the chosen route, and the final answer.
-- Approval inbox: lists paused runs waiting on an employee, each with approve and reject
-  buttons that call the decision endpoint.
+- The customer area identifies a demo customer by name and email, lists their orders,
+  submits a support message, and shows the resulting answer. The lookup is not authentication.
+- The employee area at `/employees` lists recent runs newest first and opens the same
+  run detail view.
+- The employee approval inbox lists paused runs with approve and reject buttons that
+  call the decision endpoint.
+- Employee tables create, read, update, and delete demo customers, products, and orders.
 
 It is a thin client over a strong backend, honest about that. No design-system polish.
 
@@ -112,8 +108,9 @@ It is a thin client over a strong backend, honest about that. No design-system p
 
 ## Out of scope (named as "next" in the README)
 
-- Real customer and employee authentication, authorization, and per-key rate limiting.
-  The customer name and email lookup is intentionally not authentication.
+- Authentication and authorization for the employee area.
+- A concurrent-edit transaction policy for employee business data.
+- API-key authentication and per-key rate limiting.
 - Structured logging with request tracing and a metrics endpoint.
 - Live streaming (server-sent events) of the agent's progress. Polling covers the demo.
 - Any real payment integration. Refunds are simulated against the fake business data.
