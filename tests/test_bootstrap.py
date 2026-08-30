@@ -1,5 +1,5 @@
-from copy import deepcopy
 from contextlib import asynccontextmanager
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -35,7 +35,9 @@ class Connection:
 
     async def execute(self, query: str, params: tuple[Any, ...] | None = None) -> Result:
         if "SELECT EXISTS" in query:
-            return Result([(any(self.database.business[table] for table in self.database.business),)])
+            return Result(
+                [(any(self.database.business[table] for table in self.database.business),)]
+            )
         if query.startswith("TRUNCATE orders"):
             for table in self.database.business.values():
                 table.clear()
@@ -136,14 +138,18 @@ class Saver:
 
 
 @pytest.fixture
-def bootstrap_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> tuple[DemoDatabase, FakeModel]:
+def bootstrap_environment(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> tuple[DemoDatabase, FakeModel]:
     help_directory = tmp_path / "docs" / "help"
     help_directory.mkdir(parents=True)
     (help_directory / "one.md").write_text("First document")
     (help_directory / "two.md").write_text("Second document")
     database = DemoDatabase()
     model = FakeModel()
-    settings = Settings(database_url="postgresql://test", openrouter_api_key="test", embedding_dim=3)
+    settings = Settings(
+        database_url="postgresql://test", openrouter_api_key="test", embedding_dim=3
+    )
 
     async def apply_schema(_: Connection, __: int) -> None:
         pass
@@ -193,7 +199,10 @@ async def test_reset_demo_data_wipes_and_reseeds(
     await bootstrap.bootstrap()
     database.business["orders"][0] = (*database.business["orders"][0][:-1], "approved")
     settings = Settings(
-        database_url="postgresql://test", openrouter_api_key="test", embedding_dim=3, reset_demo_data=True
+        database_url="postgresql://test",
+        openrouter_api_key="test",
+        embedding_dim=3,
+        reset_demo_data=True,
     )
     monkeypatch.setattr(bootstrap, "get_settings", lambda: settings)
 

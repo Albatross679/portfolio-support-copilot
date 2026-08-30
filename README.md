@@ -36,7 +36,7 @@ For console development, run `cd web && npm install && npm run dev`. Leave `VITE
 
 The `init` Compose service applies the schema, seeds fake business data only when the business tables are empty, creates LangGraph checkpoint tables, and embeds documents in `docs/help/`. It exits successfully without a key so the API and worker can still boot, but RAG runs require embeddings and therefore an OpenRouter key. On later starts, unchanged documents are skipped; changed, added, or removed documents are synchronized automatically. Re-ingest documents manually with `docker compose run --rm init python scripts/ingest_help.py`.
 
-`EMBEDDING_DIM` defaults to 1536, which matches `openai/text-embedding-3-small`. When changing the embedding model or its output size, set both `OPENROUTER_EMBEDDING_MODEL` and `EMBEDDING_DIM`; the changed fingerprint automatically re-ingests every help document. Set `RESET_DEMO_DATA=1` for the init service to truncate and reseed the business tables on its next start. This does not reset help-document embeddings.
+`EMBEDDING_DIM` defaults to 1536, which matches `openai/text-embedding-3-small`. When changing the embedding model or its output size, set both `OPENROUTER_EMBEDDING_MODEL` and `EMBEDDING_DIM`; the changed fingerprint automatically re-ingests every help document. Every init run with `RESET_DEMO_DATA=1` truncates and reseeds the business tables. This does not reset help-document embeddings.
 
 ## Development and tests
 

@@ -66,9 +66,7 @@ async def ingest_help_documents(
         if stored_fingerprints.get(document[0]) != {fingerprints[document[0]]}
     ]
     rows = [
-        (name, index, chunk)
-        for name, _, chunks in changed
-        for index, chunk in enumerate(chunks)
+        (name, index, chunk) for name, _, chunks in changed for index, chunk in enumerate(chunks)
     ]
     embeddings = await model.embed([row[2] for row in rows]) if rows else []
     if len(embeddings) != len(rows):
