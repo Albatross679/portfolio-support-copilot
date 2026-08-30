@@ -3,8 +3,19 @@ from datetime import UTC, datetime, timedelta
 from psycopg import AsyncConnection
 
 
-async def seed_business_data(conn: AsyncConnection) -> None:
-    await conn.execute("TRUNCATE orders, products, customers RESTART IDENTITY CASCADE")
+async def seed_business_data(conn: AsyncConnection, reset: bool = False) -> None:
+    if reset:
+        await conn.execute("TRUNCATE orders, products, customers RESTART IDENTITY CASCADE")
+    else:
+        result = await conn.execute(
+            """
+            SELECT EXISTS (SELECT 1 FROM customers)
+                OR EXISTS (SELECT 1 FROM products)
+                OR EXISTS (SELECT 1 FROM orders)
+            """
+        )
+        if (await result.fetchone())[0]:
+            return
     customers = [
         ("maya@example.test", "Maya Chen"),
         ("sam@example.test", "Sam Rivera"),

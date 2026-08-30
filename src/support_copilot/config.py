@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     openrouter_embedding_model: str = "openai/text-embedding-3-small"
     embedding_dim: int = Field(default=1536, ge=1, le=16000)
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    reset_demo_data: bool = False
 
 
 @lru_cache

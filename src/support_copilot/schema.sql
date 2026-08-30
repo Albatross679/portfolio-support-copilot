@@ -40,8 +40,12 @@ CREATE TABLE IF NOT EXISTS help_document_embeddings (
   content TEXT NOT NULL,
   metadata JSONB NOT NULL DEFAULT '{}',
   embedding vector({{EMBEDDING_DIM}}) NOT NULL,
+  document_fingerprint TEXT NOT NULL,
   UNIQUE (document_name, chunk_index)
 );
+
+ALTER TABLE help_document_embeddings
+  ADD COLUMN IF NOT EXISTS document_fingerprint TEXT;
 
 REVOKE ALL ON customers, products, orders FROM support_copilot_reader;
 GRANT SELECT ON customers, products, orders TO support_copilot_reader;

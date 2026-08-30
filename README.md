@@ -34,9 +34,9 @@ FastAPI serves the built console and accepts and reports runs. The arq worker ow
 
 For console development, run `cd web && npm install && npm run dev`. Leave `VITE_API_BASE` blank to send `/api` requests through the Vite proxy to `http://localhost:8000`, or set `VITE_API_BASE=http://localhost:8000 npm run dev`; the API permits local Vite origins. Use `VITE_API_BASE=http://localhost:8001` when the Compose fallback port is in use.
 
-The `init` Compose service applies the schema, seeds fake business data, creates LangGraph checkpoint tables, and embeds all documents in `docs/help/`. It exits successfully without a key so the API and worker can still boot, but RAG runs require embeddings and therefore an OpenRouter key. Re-ingest documents after changes with `docker compose run --rm init python scripts/ingest_help.py`.
+The `init` Compose service applies the schema, seeds fake business data only when the business tables are empty, creates LangGraph checkpoint tables, and embeds documents in `docs/help/`. It exits successfully without a key so the API and worker can still boot, but RAG runs require embeddings and therefore an OpenRouter key. On later starts, unchanged documents are skipped; changed, added, or removed documents are synchronized automatically. Re-ingest documents manually with `docker compose run --rm init python scripts/ingest_help.py`.
 
-`EMBEDDING_DIM` defaults to 1536, which matches `openai/text-embedding-3-small`. When changing the embedding model or its output size, set both `OPENROUTER_EMBEDDING_MODEL` and `EMBEDDING_DIM`. Drop and recreate `help_document_embeddings`, then re-ingest the help documents. This project does not migrate stored embeddings between output sizes.
+`EMBEDDING_DIM` defaults to 1536, which matches `openai/text-embedding-3-small`. When changing the embedding model or its output size, set both `OPENROUTER_EMBEDDING_MODEL` and `EMBEDDING_DIM`; the changed fingerprint automatically re-ingests every help document. Set `RESET_DEMO_DATA=1` for the init service to truncate and reseed the business tables on its next start. This does not reset help-document embeddings.
 
 ## Development and tests
 
