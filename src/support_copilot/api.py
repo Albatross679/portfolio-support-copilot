@@ -13,6 +13,7 @@ from psycopg_pool import AsyncConnectionPool
 
 from support_copilot.config import get_settings
 from support_copilot.db import StoreRepository
+from support_copilot.run_store import awaiting_orders_key
 from support_copilot.schemas import (
     CustomerIdentificationRequest,
     CustomerIdentificationResponse,
@@ -99,13 +100,10 @@ async def list_customer_orders(
 ) -> CustomerOrderList:
     await require_customer(customer_id, name, email, repository)
     orders = await repository.customer_orders(customer_id)
-    awaiting_approval: set[str] = set()
-    async for key in redis.scan_iter(match="run:*"):
-        run = await read_run(redis, (key.decode() if isinstance(key, bytes) else key).removeprefix("run:"))
-        if run.get("status") == "awaiting_approval" and run.get("customer_id") == customer_id:
-            order_number = run.get("order_number")
-            if order_number:
-                awaiting_approval.add(order_number)
+    indexed_orders = await redis.hvals(awaiting_orders_key(customer_id))
+    awaiting_approval = {
+        value.decode() if isinstance(value, bytes) else value for value in indexed_orders
+    }
     return CustomerOrderList(
         orders=[
             order.model_copy(

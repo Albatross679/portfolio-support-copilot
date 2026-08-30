@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 from typing import Any
 
@@ -12,6 +11,7 @@ from support_copilot.config import get_settings
 from support_copilot.db import StoreRepository
 from support_copilot.graph import GraphDependencies, build_graph
 from support_copilot.model import OpenRouterClient
+from support_copilot.run_store import write_run_status
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -40,18 +40,6 @@ async def shutdown(ctx: dict[str, Any]) -> None:
     await ctx["model"].close()
     await ctx["redis"].aclose()
     await ctx["pool"].close()
-
-
-async def write_status(redis: Any, run_id: str, **update: Any) -> None:
-    key = f"run:{run_id}"
-    existing = await redis.get(key)
-    data = (
-        json.loads(existing.decode() if isinstance(existing, bytes) else existing)
-        if existing
-        else {"run_id": run_id}
-    )
-    data.update(update)
-    await redis.set(key, json.dumps(data, default=str))
 
 
 def state_payload(snapshot: Any) -> dict[str, Any]:
@@ -92,7 +80,7 @@ async def run_agent(
             previous = await ctx["graph"].aget_state(config)
             if interrupt_payload(previous):
                 raise ValueError("Thread already has a run awaiting approval")
-            await write_status(ctx["redis"], run_id, status="running")
+            await write_run_status(ctx["redis"], run_id, status="running")
             initial_state = {
                 "run_id": run_id,
                 "message": message,
@@ -112,7 +100,7 @@ async def run_agent(
             snapshot = await ctx["graph"].aget_state(config)
             payload = interrupt_payload(snapshot)
             if payload:
-                await write_status(
+                await write_run_status(
                     ctx["redis"],
                     run_id,
                     status="awaiting_approval",
@@ -123,17 +111,17 @@ async def run_agent(
                 )
                 return {"status": "awaiting_approval"}
             payload = state_payload(snapshot)
-            await write_status(ctx["redis"], run_id, status="completed", **payload)
+            await write_run_status(ctx["redis"], run_id, status="completed", **payload)
             return payload
     except asyncio.CancelledError:
         logger.warning("run %s was cancelled", run_id)
-        await write_status(
+        await write_run_status(
             ctx["redis"], run_id, status="failed", error="Job cancelled before completion"
         )
         raise
     except Exception as error:
         logger.exception("run %s failed", run_id)
-        await write_status(ctx["redis"], run_id, status="failed", error=str(error))
+        await write_run_status(ctx["redis"], run_id, status="failed", error=str(error))
         raise
 
 
@@ -150,21 +138,21 @@ async def resume_agent(
             paused = await ctx["graph"].aget_state(config)
             if paused.values.get("run_id") != run_id or not interrupt_payload(paused):
                 raise ValueError("Run does not own the paused thread checkpoint")
-            await write_status(ctx["redis"], run_id, status="running")
+            await write_run_status(ctx["redis"], run_id, status="running")
             await ctx["graph"].ainvoke(Command(resume=decision), config=config)
             snapshot = await ctx["graph"].aget_state(config)
             payload = state_payload(snapshot)
-            await write_status(ctx["redis"], run_id, status="completed", **payload)
+            await write_run_status(ctx["redis"], run_id, status="completed", **payload)
             return payload
     except asyncio.CancelledError:
         logger.warning("resume %s was cancelled", run_id)
-        await write_status(
+        await write_run_status(
             ctx["redis"], run_id, status="failed", error="Job cancelled before completion"
         )
         raise
     except Exception as error:
         logger.exception("resume %s failed", run_id)
-        await write_status(ctx["redis"], run_id, status="failed", error=str(error))
+        await write_run_status(ctx["redis"], run_id, status="failed", error=str(error))
         raise
 
 

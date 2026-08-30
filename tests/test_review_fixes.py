@@ -37,6 +37,7 @@ from support_copilot.schemas import (
     RunState,
     RunStatus,
 )
+from support_copilot.run_store import awaiting_orders_key, write_run_status
 from support_copilot.worker import THREAD_LOCK_TIMEOUT_SECONDS, WorkerSettings, run_agent
 
 
@@ -73,6 +74,7 @@ class FakeRedis:
     def __init__(self, run: dict[str, Any]) -> None:
         self.values = {f"run:{run['run_id']}": json.dumps(run)}
         self.enqueued: list[tuple[Any, ...]] = []
+        self.hashes: dict[str, dict[str, str]] = {}
         self.enqueue_error: Exception | None = None
         self.enqueue_result: object | None = object()
 
@@ -81,6 +83,13 @@ class FakeRedis:
 
     async def set(self, key: str, value: str) -> None:
         self.values[key] = value
+
+    async def hvals(self, key: str) -> list[str]:
+        return list(self.hashes.get(key, {}).values())
+
+    def pipeline(self, *, transaction: bool) -> "FakePipeline":
+        assert transaction is True
+        return FakePipeline(self)
 
     async def enqueue_job(self, *args: Any, **kwargs: Any) -> object:
         if self.enqueue_error:
@@ -96,6 +105,36 @@ class FakeRedis:
     @asynccontextmanager
     async def lock(self, *args: Any, **kwargs: Any):
         yield
+
+
+class FakePipeline:
+    def __init__(self, redis: FakeRedis) -> None:
+        self.redis = redis
+        self.commands: list[tuple[str, tuple[Any, ...]]] = []
+
+    async def __aenter__(self) -> "FakePipeline":
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        pass
+
+    def set(self, *args: Any) -> None:
+        self.commands.append(("set", args))
+
+    def hdel(self, *args: Any) -> None:
+        self.commands.append(("hdel", args))
+
+    def hset(self, *args: Any) -> None:
+        self.commands.append(("hset", args))
+
+    async def execute(self) -> None:
+        for command, args in self.commands:
+            if command == "set":
+                self.redis.values[args[0]] = args[1]
+            elif command == "hdel":
+                self.redis.hashes.get(args[0], {}).pop(args[1], None)
+            else:
+                self.redis.hashes.setdefault(args[0], {})[args[1]] = args[2]
 
 
 CONTRACT_MODEL_NAMES = {
@@ -235,14 +274,19 @@ async def test_customer_lookup_orders_and_scoped_run_access() -> None:
         update={"refund_progress": "approved"}
     )
     redis = FakeRedis({"run_id": "run-paused", "thread_id": "thread-1", "status": "queued"})
-    redis.values["run:run-paused"] = json.dumps(
-        {
-            "run_id": "run-paused",
-            "thread_id": "thread-1",
-            "status": "awaiting_approval",
-            "customer_id": 1,
-            "order_number": "ORD-1001",
-        }
+    await write_run_status(
+        redis,
+        "run-paused",
+        status="awaiting_approval",
+        customer_id=1,
+        order_number="ORD-1001",
+    )
+    await write_run_status(
+        redis,
+        "run-paused-2",
+        status="awaiting_approval",
+        customer_id=1,
+        order_number="ORD-1001",
     )
 
     matched = await identify_customer(
@@ -260,6 +304,14 @@ async def test_customer_lookup_orders_and_scoped_run_access() -> None:
     assert missing.customer is None
     assert orders.orders[0].refund_progress == "awaiting_approval"
     assert run.run_id == "run-paused"
+
+    await write_run_status(redis, "run-paused", status="completed")
+
+    assert await redis.hvals(awaiting_orders_key(1)) == ["ORD-1001"]
+
+    await write_run_status(redis, "run-paused-2", status="completed")
+
+    assert await redis.hvals(awaiting_orders_key(1)) == []
 
 
 @pytest.mark.asyncio
