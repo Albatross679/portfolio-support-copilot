@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 from pathlib import Path
 
@@ -34,30 +35,70 @@ def chunk_text(text: str, chunk_size: int = 700, overlap: int = 100) -> list[str
     return chunks
 
 
+def document_fingerprint(text: str, embedding_model: str, embedding_dim: int) -> str:
+    value = f"{text}\0{embedding_model}\0{embedding_dim}".encode()
+    return hashlib.sha256(value).hexdigest()
+
+
 async def ingest_help_documents(
-    pool: AsyncConnectionPool, model: OpenRouterClient, embedding_dim: int
+    pool: AsyncConnectionPool,
+    model: OpenRouterClient,
+    embedding_dim: int,
+    embedding_model: str,
 ) -> int:
-    rows = [
-        (path.name, index, chunk)
-        for path in sorted(find_help_directory().glob("*.md"))
-        for index, chunk in enumerate(chunk_text(path.read_text()))
+    documents = []
+    for path in sorted(find_help_directory().glob("*.md")):
+        text = path.read_text()
+        documents.append((path.name, text, chunk_text(text)))
+    fingerprints = {
+        name: document_fingerprint(text, embedding_model, embedding_dim)
+        for name, text, _ in documents
+    }
+    async with pool.connection() as conn:
+        result = await conn.execute(
+            "SELECT document_name, array_agg(DISTINCT document_fingerprint) "
+            "FROM help_document_embeddings GROUP BY document_name"
+        )
+        stored_fingerprints = {name: set(values) for name, values in await result.fetchall()}
+    changed = [
+        document
+        for document in documents
+        if stored_fingerprints.get(document[0]) != {fingerprints[document[0]]}
     ]
-    embeddings = await model.embed([row[2] for row in rows])
+    rows = [
+        (name, index, chunk) for name, _, chunks in changed for index, chunk in enumerate(chunks)
+    ]
+    embeddings = await model.embed([row[2] for row in rows]) if rows else []
     if len(embeddings) != len(rows):
         raise ValueError("Embedding provider returned an unexpected number of vectors")
     if any(len(embedding) != embedding_dim for embedding in embeddings):
         raise ValueError(f"Embedding provider did not return {embedding_dim}-value vectors")
     async with pool.connection() as conn:
-        await conn.execute("TRUNCATE help_document_embeddings RESTART IDENTITY")
-        for (name, index, content), embedding in zip(rows, embeddings, strict=True):
+        async with conn.transaction():
             await conn.execute(
-                """
-                INSERT INTO help_document_embeddings (document_name, chunk_index, content, metadata, embedding)
-                VALUES (%s, %s, %s, %s::jsonb, %s::vector)
-                """,
-                (name, index, content, json.dumps({"source": name}), vector_literal(embedding)),
+                "DELETE FROM help_document_embeddings WHERE NOT (document_name = ANY(%s))",
+                (list(fingerprints),),
             )
-        await conn.commit()
+            for name, _, _ in changed:
+                await conn.execute(
+                    "DELETE FROM help_document_embeddings WHERE document_name = %s", (name,)
+                )
+            for (name, index, content), embedding in zip(rows, embeddings, strict=True):
+                await conn.execute(
+                    """
+                    INSERT INTO help_document_embeddings
+                        (document_name, chunk_index, content, metadata, embedding, document_fingerprint)
+                    VALUES (%s, %s, %s, %s::jsonb, %s::vector, %s)
+                    """,
+                    (
+                        name,
+                        index,
+                        content,
+                        json.dumps({"source": name}),
+                        vector_literal(embedding),
+                        fingerprints[name],
+                    ),
+                )
     return len(rows)
 
 
@@ -69,7 +110,9 @@ async def main() -> None:
     await pool.open()
     model = OpenRouterClient(settings)
     try:
-        count = await ingest_help_documents(pool, model, settings.embedding_dim)
+        count = await ingest_help_documents(
+            pool, model, settings.embedding_dim, settings.openrouter_embedding_model
+        )
         print(f"Ingested {count} help-document chunks")
     finally:
         await model.close()
