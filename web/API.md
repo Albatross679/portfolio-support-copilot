@@ -8,7 +8,7 @@ The Compose console and API share one origin. In Vite development, leave `VITE_A
 
 `GET /runs/{run_id}` returns a run object with `run_id`, `thread_id`, `status`, `created_at`, `message_preview`, `extraction`, `route`, `answer`, and `proposed_refund` once available. `status` is one of `queued`, `running`, `awaiting_approval`, `completed`, or `failed`.
 
-`GET /runs` accepts optional `status`, `limit`, and `offset` query parameters. It returns `{ "runs": [Run], "total": number, "limit": number, "offset": number }`, sorted newest first. The employee run monitor uses this endpoint. The approval inbox calls it with `status=awaiting_approval`.
+`GET /runs` accepts optional `status`, `limit`, and `offset` query parameters. It returns `{ "runs": [Run], "total": number, "limit": number, "offset": number }`, sorted newest first. The employee run monitor uses pagination. The approval inbox does not paginate and requests up to 100 runs with `status=awaiting_approval`. The demo store will not have 100 simultaneous paused runs.
 
 `POST /runs/{run_id}/decision` accepts `{ "decision": "approve" }` or `{ "decision": "reject" }`, enqueues a resume job, and returns the current run object with `202`. Poll `GET /runs/{run_id}` until it is completed to read its `answer`.
 
