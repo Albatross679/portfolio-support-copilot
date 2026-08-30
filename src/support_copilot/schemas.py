@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -98,6 +99,8 @@ class RunStatus(BaseModel):
     run_id: str
     thread_id: str
     status: RunState
+    created_at: datetime | None = None
+    message_preview: str | None = None
     extraction: Extraction | None = None
     route: RouteDecision | None = None
     proposed_refund: RefundProposal | None = None
@@ -107,3 +110,52 @@ class RunStatus(BaseModel):
 
 class RunList(BaseModel):
     runs: list[RunStatus]
+    total: int
+    limit: int
+    offset: int
+
+
+class CustomerInput(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    name: str = Field(min_length=1, max_length=200)
+
+
+class Customer(CustomerInput):
+    id: int
+
+
+class CustomerList(BaseModel):
+    customers: list[Customer]
+
+
+class ProductInput(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    format: Literal["Blu-ray", "DVD", "4K UHD", "box set"]
+    sku: str = Field(min_length=1, max_length=100)
+    price_cents: int = Field(ge=0)
+
+
+class Product(ProductInput):
+    id: int
+
+
+class ProductList(BaseModel):
+    products: list[Product]
+
+
+class OrderInput(BaseModel):
+    order_number: str = Field(min_length=1, max_length=100)
+    customer_id: int = Field(gt=0)
+    product_id: int = Field(gt=0)
+    quantity: int = Field(gt=0)
+    ordered_at: datetime
+    status: str = Field(min_length=1, max_length=50)
+    refund_status: Literal["none", "approved", "rejected"] = "none"
+
+
+class Order(OrderInput):
+    id: int
+
+
+class OrderList(BaseModel):
+    orders: list[Order]

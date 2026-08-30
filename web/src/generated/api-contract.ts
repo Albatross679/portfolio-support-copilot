@@ -27,6 +27,8 @@ export interface SupportRun {
   run_id: string;
   thread_id: string;
   status: RunStatus;
+  created_at?: string | null;
+  message_preview?: string | null;
   extraction?: StructuredExtraction | null;
   route?: SupportRoute | null;
   proposed_refund?: ProposedRefund | null;
@@ -52,6 +54,68 @@ export interface DecisionRequest {
 
 export interface RunListResponse {
   runs: SupportRun[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface CustomerInput {
+  email: string;
+  name: string;
+}
+
+export interface Customer {
+  email: string;
+  name: string;
+  id: number;
+}
+
+export interface CustomerListResponse {
+  customers: Customer[];
+}
+
+export interface ProductInput {
+  title: string;
+  format: "Blu-ray" | "DVD" | "4K UHD" | "box set";
+  sku: string;
+  price_cents: number;
+}
+
+export interface Product {
+  title: string;
+  format: "Blu-ray" | "DVD" | "4K UHD" | "box set";
+  sku: string;
+  price_cents: number;
+  id: number;
+}
+
+export interface ProductListResponse {
+  products: Product[];
+}
+
+export interface OrderInput {
+  order_number: string;
+  customer_id: number;
+  product_id: number;
+  quantity: number;
+  ordered_at: string;
+  status: string;
+  refund_status?: "none" | "approved" | "rejected";
+}
+
+export interface Order {
+  order_number: string;
+  customer_id: number;
+  product_id: number;
+  quantity: number;
+  ordered_at: string;
+  status: string;
+  refund_status?: "none" | "approved" | "rejected";
+  id: number;
+}
+
+export interface OrderListResponse {
+  orders: Order[];
 }
 
 export interface CustomerIdentity {
