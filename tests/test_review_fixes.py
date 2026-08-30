@@ -9,12 +9,26 @@ import pytest
 from fastapi import HTTPException
 from pydantic import BaseModel
 
-from support_copilot.api import decide_run, get_run, list_runs
+from support_copilot.api import (
+    create_run,
+    decide_run,
+    get_customer_run,
+    get_run,
+    identify_customer,
+    list_customer_orders,
+    list_runs,
+)
 from support_copilot.ingest import find_help_directory
 from support_copilot.model import strict_json_schema
 from support_copilot.schemas import (
+    CustomerIdentificationRequest,
+    CustomerIdentificationResponse,
+    CustomerIdentity,
+    CustomerOrder,
+    CustomerOrderList,
     DecisionRequest,
     Extraction,
+    RefundProgress,
     RefundProposal,
     RouteDecision,
     RunCreated,
@@ -24,6 +38,35 @@ from support_copilot.schemas import (
     RunStatus,
 )
 from support_copilot.worker import THREAD_LOCK_TIMEOUT_SECONDS, WorkerSettings, run_agent
+
+
+class FakeCustomerRepository:
+    def __init__(self) -> None:
+        self.customer = CustomerIdentity(id=1, name="Maya Chen", email="maya@example.test")
+        self.orders = [
+            CustomerOrder(
+                order_number="ORD-1001",
+                title="The Last Horizon",
+                media_format="4K UHD",
+                quantity=1,
+                ordered_at="2025-01-01 00:00:00+00",
+                status="delivered",
+                refund_progress="none",
+            )
+        ]
+
+    async def identify_customer(self, name: str, email: str) -> CustomerIdentity | None:
+        if (name, email) == (self.customer.name, self.customer.email):
+            return self.customer
+        return None
+
+    async def customer_orders(self, customer_id: int) -> list[CustomerOrder]:
+        return self.orders if customer_id == self.customer.id else []
+
+    async def customer_owns_order(self, customer_id: int, order_number: str) -> bool:
+        return customer_id == self.customer.id and any(
+            order.order_number == order_number for order in self.orders
+        )
 
 
 class FakeRedis:
@@ -56,6 +99,11 @@ class FakeRedis:
 
 
 CONTRACT_MODEL_NAMES = {
+    CustomerIdentity: "CustomerIdentity",
+    CustomerIdentificationRequest: "CustomerIdentificationRequest",
+    CustomerIdentificationResponse: "CustomerIdentificationResponse",
+    CustomerOrder: "CustomerOrder",
+    CustomerOrderList: "CustomerOrderList",
     Extraction: "StructuredExtraction",
     RouteDecision: "SupportRoute",
     RefundProposal: "ProposedRefund",
@@ -70,6 +118,8 @@ CONTRACT_MODEL_NAMES = {
 def contract_type(annotation: Any) -> Any:
     if annotation is RunState:
         return {"ref": "RunStatus"}
+    if annotation is RefundProgress:
+        return {"ref": "RefundProgress"}
     origin = get_origin(annotation)
     arguments = get_args(annotation)
     if origin is Literal:
@@ -100,6 +150,7 @@ def test_shared_api_contract_matches_backend_models() -> None:
 
     expected_types = {
         "RunStatus": {"enum": list(get_args(RunState.__value__))},
+        "RefundProgress": {"enum": list(get_args(RefundProgress.__value__))},
         **{
             frontend_name: contract_model(model)
             for model, frontend_name in CONTRACT_MODEL_NAMES.items()
@@ -178,6 +229,56 @@ async def test_list_runs_filters_awaiting_approval() -> None:
 
 
 @pytest.mark.asyncio
+async def test_customer_lookup_orders_and_scoped_run_access() -> None:
+    repository = FakeCustomerRepository()
+    redis = FakeRedis({"run_id": "run-paused", "thread_id": "thread-1", "status": "queued"})
+    redis.values["run:run-paused"] = json.dumps(
+        {
+            "run_id": "run-paused",
+            "thread_id": "thread-1",
+            "status": "awaiting_approval",
+            "customer_id": 1,
+            "order_number": "ORD-1001",
+        }
+    )
+
+    matched = await identify_customer(
+        CustomerIdentificationRequest(name="Maya Chen", email="maya@example.test"), repository
+    )
+    missing = await identify_customer(
+        CustomerIdentificationRequest(name="Maya Chen", email="wrong@example.test"), repository
+    )
+    orders = await list_customer_orders(
+        1, "Maya Chen", "maya@example.test", redis, repository
+    )
+    run = await get_customer_run(1, "run-paused", "Maya Chen", "maya@example.test", redis, repository)
+
+    assert matched.customer == repository.customer
+    assert missing.customer is None
+    assert orders.orders[0].refund_progress == "awaiting_approval"
+    assert run.run_id == "run-paused"
+
+
+@pytest.mark.asyncio
+async def test_customer_run_rejects_an_order_outside_their_account() -> None:
+    repository = FakeCustomerRepository()
+    redis = FakeRedis({"run_id": "run-1", "thread_id": "thread-1", "status": "queued"})
+
+    with pytest.raises(HTTPException) as error:
+        await create_run(
+            RunRequest(
+                message="Please help",
+                customer=repository.customer,
+                order_number="ORD-9999",
+            ),
+            redis,
+            repository,
+        )
+
+    assert error.value.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_failed_decision_enqueue_leaves_run_retryable() -> None:
     run = {
         "run_id": "run-1",
@@ -245,6 +346,7 @@ async def test_new_thread_run_clears_values_from_previous_run() -> None:
     assert graph.input is not None
     assert graph.input["answer"] is None
     assert graph.input["proposed_refund"] is None
+    assert graph.input["selected_order_number"] is None
     assert result == {"answer": "new"}
 
 

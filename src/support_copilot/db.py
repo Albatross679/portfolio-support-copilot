@@ -10,7 +10,7 @@ from sqlglot import exp, parse
 from sqlglot.errors import ParseError
 from sqlglot.optimizer.scope import traverse_scope
 
-from support_copilot.schemas import RefundProposal
+from support_copilot.schemas import CustomerIdentity, CustomerOrder, RefundProposal
 
 ALLOWED_TABLES = {"customers", "products", "orders"}
 ALLOWED_FUNCTIONS = {
@@ -33,6 +33,43 @@ ALLOWED_FUNCTIONS = {
 class StoreRepository:
     def __init__(self, pool: AsyncConnectionPool) -> None:
         self.pool = pool
+
+    async def identify_customer(self, name: str, email: str) -> CustomerIdentity | None:
+        async with self.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cur:
+                await cur.execute(
+                    "SELECT id, name, email FROM customers WHERE name = %s AND email = %s",
+                    (name, email),
+                )
+                row = await cur.fetchone()
+        return CustomerIdentity.model_validate(row) if row else None
+
+    async def customer_orders(self, customer_id: int) -> list[CustomerOrder]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cur:
+                await cur.execute(
+                    """
+                    SELECT o.order_number, p.title, p.format AS media_format, o.quantity,
+                           o.ordered_at::text AS ordered_at, o.status,
+                           o.refund_status AS refund_progress
+                    FROM orders o
+                    JOIN products p ON p.id = o.product_id
+                    WHERE o.customer_id = %s
+                    ORDER BY o.ordered_at DESC
+                    """,
+                    (customer_id,),
+                )
+                rows = await cur.fetchall()
+        return [CustomerOrder.model_validate(row) for row in rows]
+
+    async def customer_owns_order(self, customer_id: int, order_number: str) -> bool:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "SELECT 1 FROM orders WHERE customer_id = %s AND order_number = %s",
+                    (customer_id, order_number),
+                )
+                return await cur.fetchone() is not None
 
     async def retrieve(self, embedding: list[float], limit: int = 4) -> list[dict[str, Any]]:
         async with self.pool.connection() as conn:

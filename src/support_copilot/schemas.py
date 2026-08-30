@@ -43,9 +43,43 @@ class RefundProposal(BaseModel):
     reason: str
 
 
+class CustomerIdentity(BaseModel):
+    id: int
+    name: str
+    email: str
+
+
+class CustomerIdentificationRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    email: str = Field(min_length=1, max_length=320)
+
+
+class CustomerIdentificationResponse(BaseModel):
+    customer: CustomerIdentity | None = None
+
+
+type RefundProgress = Literal["none", "awaiting_approval", "approved", "rejected"]
+
+
+class CustomerOrder(BaseModel):
+    order_number: str
+    title: str
+    media_format: str
+    quantity: int
+    ordered_at: str
+    status: str
+    refund_progress: RefundProgress
+
+
+class CustomerOrderList(BaseModel):
+    orders: list[CustomerOrder]
+
+
 class RunRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
     thread_id: str | None = Field(default=None, max_length=255)
+    customer: CustomerIdentity | None = None
+    order_number: str | None = Field(default=None, max_length=255)
 
 
 class RunCreated(BaseModel):

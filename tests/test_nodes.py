@@ -19,6 +19,18 @@ async def test_extract_and_route_use_structured_model_output() -> None:
 
 
 @pytest.mark.asyncio
+async def test_selected_order_overrides_model_extraction() -> None:
+    model = FakeModel(defaults())
+    nodes = build_nodes(GraphDependencies(model, FakeRepository(), FakeCache()))
+
+    extracted = await nodes["extract"](
+        {"message": "My disc arrived scratched", "selected_order_number": "ORD-1004"}
+    )
+
+    assert extracted["extraction"]["order_number"] == "ORD-1004"
+
+
+@pytest.mark.asyncio
 async def test_rag_retrieves_documents_and_responds_from_context() -> None:
     model = FakeModel(defaults())
     nodes = build_nodes(GraphDependencies(model, FakeRepository(), FakeCache()))

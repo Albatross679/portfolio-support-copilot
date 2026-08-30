@@ -9,9 +9,14 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from psycopg_pool import AsyncConnectionPool
 
 from support_copilot.config import get_settings
+from support_copilot.db import StoreRepository
 from support_copilot.schemas import (
+    CustomerIdentificationRequest,
+    CustomerIdentificationResponse,
+    CustomerOrderList,
     DecisionRequest,
     RunCreated,
     RunList,
@@ -27,8 +32,14 @@ CONSOLE_DIST = Path.cwd() / "web" / "dist"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.redis = await create_pool(RedisSettings.from_dsn(settings.redis_url))
+    app.state.pool = AsyncConnectionPool(
+        settings.database_url, min_size=1, max_size=5, open=False, kwargs={"autocommit": True}
+    )
+    await app.state.pool.open()
+    app.state.repository = StoreRepository(app.state.pool)
     yield
     await app.state.redis.aclose()
+    await app.state.pool.close()
 
 
 app = FastAPI(title="Portfolio Support Copilot", version="0.1.0", lifespan=lifespan)
@@ -45,6 +56,10 @@ def redis_client(request: Request) -> Any:
     return request.app.state.redis
 
 
+def store_repository(request: Request) -> StoreRepository:
+    return request.app.state.repository
+
+
 async def read_run(redis: Any, run_id: str) -> dict[str, Any]:
     value = await redis.get(f"run:{run_id}")
     if value is None:
@@ -57,15 +72,113 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.post("/customers/identify", response_model=CustomerIdentificationResponse)
+async def identify_customer(
+    payload: CustomerIdentificationRequest, repository: StoreRepository = Depends(store_repository)
+) -> CustomerIdentificationResponse:
+    return CustomerIdentificationResponse(
+        customer=await repository.identify_customer(payload.name, payload.email)
+    )
+
+
+async def require_customer(
+    customer_id: int, name: str, email: str, repository: StoreRepository
+) -> None:
+    customer = await repository.identify_customer(name, email)
+    if customer is None or customer.id != customer_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
+
+
+@app.get("/customers/{customer_id}/orders", response_model=CustomerOrderList)
+async def list_customer_orders(
+    customer_id: int,
+    name: str,
+    email: str,
+    redis: Any = Depends(redis_client),
+    repository: StoreRepository = Depends(store_repository),
+) -> CustomerOrderList:
+    await require_customer(customer_id, name, email, repository)
+    orders = await repository.customer_orders(customer_id)
+    awaiting_approval: set[str] = set()
+    async for key in redis.scan_iter(match="run:*"):
+        run = await read_run(redis, (key.decode() if isinstance(key, bytes) else key).removeprefix("run:"))
+        if run.get("status") == "awaiting_approval" and run.get("customer_id") == customer_id:
+            order_number = run.get("order_number")
+            if order_number:
+                awaiting_approval.add(order_number)
+    return CustomerOrderList(
+        orders=[
+            order.model_copy(
+                update={"refund_progress": "awaiting_approval"}
+                if order.order_number in awaiting_approval and order.refund_progress == "none"
+                else {}
+            )
+            for order in orders
+        ]
+    )
+
+
 @app.post("/runs", response_model=RunCreated, status_code=status.HTTP_202_ACCEPTED)
-async def create_run(payload: RunRequest, redis: Any = Depends(redis_client)) -> RunCreated:
+async def create_run(
+    payload: RunRequest,
+    redis: Any = Depends(redis_client),
+    repository: StoreRepository = Depends(store_repository),
+) -> RunCreated:
+    customer_id: int | None = None
+    if payload.customer:
+        await require_customer(
+            payload.customer.id, payload.customer.name, payload.customer.email, repository
+        )
+        customer_id = payload.customer.id
+        if payload.order_number and not await repository.customer_owns_order(
+            customer_id, payload.order_number
+        ):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Order not found")
+    elif payload.order_number:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="An order selection requires a customer identity",
+        )
     run_id = str(uuid.uuid4())
     thread_id = payload.thread_id or str(uuid.uuid4())
     await redis.set(
-        f"run:{run_id}", json.dumps({"run_id": run_id, "thread_id": thread_id, "status": "queued"})
+        f"run:{run_id}",
+        json.dumps(
+            {
+                "run_id": run_id,
+                "thread_id": thread_id,
+                "status": "queued",
+                "customer_id": customer_id,
+                "order_number": payload.order_number,
+            }
+        ),
     )
-    await redis.enqueue_job("run_agent", run_id, payload.message, thread_id, _job_id=run_id)
+    await redis.enqueue_job(
+        "run_agent",
+        run_id,
+        payload.message,
+        thread_id,
+        customer_id,
+        payload.order_number,
+        _job_id=run_id,
+    )
     return RunCreated(run_id=run_id, thread_id=thread_id)
+
+
+@app.get("/customers/{customer_id}/runs/{run_id}", response_model=RunStatus)
+async def get_customer_run(
+    customer_id: int,
+    run_id: str,
+    name: str,
+    email: str,
+    redis: Any = Depends(redis_client),
+    repository: StoreRepository = Depends(store_repository),
+) -> RunStatus:
+    await require_customer(customer_id, name, email, repository)
+    run = await read_run(redis, run_id)
+    if run.get("customer_id") != customer_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
+    return RunStatus.model_validate(run)
 
 
 @app.get("/runs", response_model=RunList)

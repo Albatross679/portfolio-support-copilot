@@ -28,6 +28,8 @@ class CacheClient(Protocol):
 class SupportState(TypedDict, total=False):
     run_id: str
     message: str
+    customer_id: int | None
+    selected_order_number: str | None
     extraction: dict[str, Any] | None
     routing: dict[str, Any] | None
     handler: Literal["rag", "sql", "refund"] | None
@@ -53,7 +55,10 @@ def build_nodes(deps: GraphDependencies) -> dict[str, Any]:
             "Extract store-support fields. Do not invent an order number or title. Use only the fixed enum values.",
             state["message"],
         )
-        return {"extraction": extraction.model_dump()}
+        fields = extraction.model_dump()
+        if state.get("selected_order_number"):
+            fields["order_number"] = state["selected_order_number"]
+        return {"extraction": fields}
 
     async def route(state: SupportState) -> dict[str, Any]:
         if state["extraction"] is None:

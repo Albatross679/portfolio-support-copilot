@@ -1,4 +1,4 @@
-import type { CreateRunRequest, CreateRunResponse, DecisionRequest, DecisionResponse, RunListResponse, RunStatus, SupportApi, SupportRun } from "./types";
+import type { CreateRunRequest, CreateRunResponse, CustomerIdentificationRequest, CustomerIdentificationResponse, CustomerIdentity, CustomerOrderList, DecisionRequest, DecisionResponse, RunListResponse, RunStatus, SupportApi, SupportRun } from "./types";
 
 const API_BASE = (import.meta.env.VITE_API_BASE ?? (import.meta.env.DEV ? "/api" : "")).replace(/\/$/, "");
 
@@ -21,6 +21,9 @@ export const httpApi: SupportApi = {
   getRun: (runId: string) => request<SupportRun>(`/runs/${encodeURIComponent(runId)}`),
   listRuns: (status?: RunStatus) => request<RunListResponse>(`/runs${status ? `?status=${encodeURIComponent(status)}` : ""}`),
   decideRun: (runId: string, body: DecisionRequest) => request<DecisionResponse>(`/runs/${encodeURIComponent(runId)}/decision`, { method: "POST", body: JSON.stringify(body) }),
+  identifyCustomer: (body: CustomerIdentificationRequest) => request<CustomerIdentificationResponse>("/customers/identify", { method: "POST", body: JSON.stringify(body) }),
+  listCustomerOrders: (customer: CustomerIdentity) => request<CustomerOrderList>(`/customers/${customer.id}/orders?name=${encodeURIComponent(customer.name)}&email=${encodeURIComponent(customer.email)}`),
+  getCustomerRun: (customer: CustomerIdentity, runId: string) => request<SupportRun>(`/customers/${customer.id}/runs/${encodeURIComponent(runId)}?name=${encodeURIComponent(customer.name)}&email=${encodeURIComponent(customer.email)}`),
 };
 
 const initialRuns: SupportRun[] = [
@@ -42,16 +45,38 @@ const initialRuns: SupportRun[] = [
   },
 ];
 
+const mockCustomers: CustomerIdentity[] = [
+  { id: 1, name: "Maya Chen", email: "maya@example.test" },
+  { id: 2, name: "Sam Rivera", email: "sam@example.test" },
+  { id: 3, name: "Lee Patel", email: "lee@example.test" },
+];
+
+const mockOrders: Record<number, CustomerOrderList> = {
+  1: { orders: [
+    { order_number: "ORD-1001", title: "The Last Horizon", media_format: "4K UHD", quantity: 1, ordered_at: "2025-02-14T12:00:00Z", status: "delivered", refund_progress: "none" },
+    { order_number: "ORD-1004", title: "Cinema Classics Vol. 1", media_format: "box set", quantity: 1, ordered_at: "2025-02-05T12:00:00Z", status: "delivered", refund_progress: "none" },
+  ] },
+  2: { orders: [
+    { order_number: "ORD-1002", title: "The Last Horizon", media_format: "Blu-ray", quantity: 1, ordered_at: "2025-02-10T12:00:00Z", status: "shipped", refund_progress: "none" },
+    { order_number: "ORD-1005", title: "The Last Horizon", media_format: "4K UHD", quantity: 3, ordered_at: "2025-01-31T12:00:00Z", status: "delivered", refund_progress: "approved" },
+  ] },
+  3: { orders: [
+    { order_number: "ORD-1003", title: "Midnight Archive", media_format: "DVD", quantity: 2, ordered_at: "2025-01-13T12:00:00Z", status: "delivered", refund_progress: "rejected" },
+    { order_number: "ORD-1006", title: "Solaris Revisited", media_format: "4K UHD", quantity: 1, ordered_at: "2025-02-16T12:00:00Z", status: "preorder", refund_progress: "none" },
+  ] },
+};
+
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
 export function createMockApi(): SupportApi {
   let runs = clone(initialRuns);
+  const runCustomers = new Map<string, number>();
   let sequence = 3000;
 
   return {
-    async createRun({ message, thread_id }) {
+    async createRun({ message, thread_id, customer, order_number }) {
       const runId = `run_demo_${sequence++}`;
       const nextThreadId = thread_id ?? `thread_demo_${sequence}`;
       const isRefund = /refund|money back|reimburse/i.test(message);
@@ -60,7 +85,7 @@ export function createMockApi(): SupportApi {
         thread_id: nextThreadId,
         status: isRefund ? "awaiting_approval" : "completed",
         extraction: {
-          order_number: message.match(/(?:order\s*#?)(\d+)/i)?.[1] ?? null,
+          order_number: order_number ?? message.match(/(?:order\s*#?)(\d+)/i)?.[1] ?? null,
           product_title: /inception/i.test(message) ? "Inception" : null,
           media_format: /4k|uhd/i.test(message) ? "4K UHD" : /blu-?ray/i.test(message) ? "Blu-ray" : /dvd/i.test(message) ? "DVD" : "unknown",
           issue_type: isRefund ? "refund" : "general",
@@ -70,9 +95,10 @@ export function createMockApi(): SupportApi {
           ? { lane: "returns", handler: "refund", rationale: "Customer requested a refund." }
           : { lane: "general", handler: "rag", rationale: "General policy question." },
         ...(isRefund
-          ? { proposed_refund: { order_number: message.match(/(?:order\s*#?)(\d+)/i)?.[1] ?? "unknown", amount_cents: 1999, currency: "USD", reason: "Customer requested a simulated refund" } }
+          ? { proposed_refund: { order_number: order_number ?? message.match(/(?:order\s*#?)(\d+)/i)?.[1] ?? "unknown", amount_cents: 1999, currency: "USD", reason: "Customer requested a simulated refund" } }
           : { answer: "Our return policy allows unopened physical media to be returned within 30 days of delivery." }),
       });
+      if (customer) runCustomers.set(runId, customer.id);
       return { run_id: runId, thread_id: nextThreadId };
     },
     async getRun(runId) {
@@ -82,6 +108,24 @@ export function createMockApi(): SupportApi {
     },
     async listRuns(status) {
       return { runs: clone(status ? runs.filter((run) => run.status === status) : runs) };
+    },
+    async identifyCustomer({ name, email }) {
+      return { customer: clone(mockCustomers.find((customer) => customer.name === name && customer.email === email) ?? null) };
+    },
+    async listCustomerOrders(customer) {
+      const orders = clone(mockOrders[customer.id] ?? { orders: [] });
+      for (const order of orders.orders) {
+        if (runs.some((run) => runCustomers.get(run.run_id) === customer.id && run.status === "awaiting_approval" && run.extraction?.order_number === order.order_number)) {
+          order.refund_progress = "awaiting_approval";
+        }
+      }
+      return orders;
+    },
+    async getCustomerRun(customer, runId) {
+      if (runCustomers.get(runId) !== customer.id) throw new Error("Run not found");
+      const run = runs.find((item) => item.run_id === runId);
+      if (!run) throw new Error("Run not found");
+      return clone(run);
     },
     async decideRun(runId, { decision }) {
       const run = runs.find((item) => item.run_id === runId);

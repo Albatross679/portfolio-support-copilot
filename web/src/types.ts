@@ -2,6 +2,11 @@ import contract from "../api-contract.json";
 import type {
   CreateRunRequest,
   CreateRunResponse,
+  CustomerIdentificationRequest,
+  CustomerIdentificationResponse,
+  CustomerIdentity,
+  CustomerOrder,
+  CustomerOrderList,
   DecisionRequest,
   RunListResponse,
   RunStatus,
@@ -12,6 +17,11 @@ export const apiContract = contract;
 export type {
   CreateRunRequest,
   CreateRunResponse,
+  CustomerIdentificationRequest,
+  CustomerIdentificationResponse,
+  CustomerIdentity,
+  CustomerOrder,
+  CustomerOrderList,
   DecisionRequest,
   ProposedRefund,
   RunListResponse,
@@ -28,4 +38,7 @@ export interface SupportApi {
   getRun(runId: string): Promise<SupportRun>;
   listRuns(status?: RunStatus): Promise<RunListResponse>;
   decideRun(runId: string, request: DecisionRequest): Promise<DecisionResponse>;
+  identifyCustomer(request: CustomerIdentificationRequest): Promise<CustomerIdentificationResponse>;
+  listCustomerOrders(customer: CustomerIdentity): Promise<CustomerOrderList>;
+  getCustomerRun(customer: CustomerIdentity, runId: string): Promise<SupportRun>;
 }

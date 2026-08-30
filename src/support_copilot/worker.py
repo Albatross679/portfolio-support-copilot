@@ -75,7 +75,12 @@ def interrupt_payload(snapshot: Any) -> dict[str, Any]:
 
 
 async def run_agent(
-    ctx: dict[str, Any], run_id: str, message: str, thread_id: str
+    ctx: dict[str, Any],
+    run_id: str,
+    message: str,
+    thread_id: str,
+    customer_id: int | None = None,
+    order_number: str | None = None,
 ) -> dict[str, Any]:
     config = {"configurable": {"thread_id": thread_id}}
     try:
@@ -91,6 +96,8 @@ async def run_agent(
             initial_state = {
                 "run_id": run_id,
                 "message": message,
+                "customer_id": customer_id,
+                "selected_order_number": order_number,
                 "extraction": None,
                 "routing": None,
                 "handler": None,
