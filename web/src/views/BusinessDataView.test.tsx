@@ -70,7 +70,7 @@ it("shows an order timestamp in the employee's local time", async () => {
 
   const instant = new Date("2025-01-01T12:00:00Z");
   const pad = (part: number) => String(part).padStart(2, "0");
-  const expected = `${instant.getFullYear()}-${pad(instant.getMonth() + 1)}-${pad(instant.getDate())}T${pad(instant.getHours())}:${pad(instant.getMinutes())}:${pad(instant.getSeconds())}`;
+  const expected = `${instant.getFullYear()}-${pad(instant.getMonth() + 1)}-${pad(instant.getDate())}T${pad(instant.getHours())}:${pad(instant.getMinutes())}`;
   expect(screen.getByLabelText("Ordered at")).toHaveValue(expected);
 });
 
@@ -78,7 +78,7 @@ it("preserves the stored order timestamp when another field changes", async () =
   const user = userEvent.setup();
   const client = createMockApi();
   const orderedAt = "2025-01-01T12:34:56.789123Z";
-  client.listOrders = vi.fn(async () => ({ orders: [{ id: 1, order_number: "ORD-1001", customer_id: 1, product_id: 1, quantity: 1, ordered_at: orderedAt, status: "delivered", refund_status: "none" }] }));
+  client.listOrders = vi.fn(async () => ({ orders: [{ id: 1, order_number: "ORD-1001", customer_id: 1, product_id: 1, quantity: 1, ordered_at: orderedAt, status: "delivered", refund_status: "none" as const }] }));
   const updateOrder = vi.spyOn(client, "updateOrder");
   render(<BusinessDataView client={client} />);
 

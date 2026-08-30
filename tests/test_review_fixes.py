@@ -11,20 +11,38 @@ from fastapi import HTTPException
 from pydantic import BaseModel
 
 from support_copilot.api import (
+    create_run,
     create_customer,
+    create_order,
+    create_product,
     decide_run,
     delete_customer,
+    delete_order,
+    delete_product,
     get_run,
+    get_customer_run,
+    identify_customer,
+    list_customer_orders,
     list_customers,
+    list_orders,
+    list_products,
     list_runs,
     update_customer,
+    update_order,
+    update_product,
 )
 from support_copilot.ingest import find_help_directory
 from support_copilot.model import strict_json_schema
+from support_copilot.run_store import awaiting_orders_key, write_run_status
 from support_copilot.schemas import (
     Customer,
+    CustomerIdentificationRequest,
+    CustomerIdentificationResponse,
+    CustomerIdentity,
     CustomerInput,
     CustomerList,
+    CustomerOrder,
+    CustomerOrderList,
     DecisionRequest,
     Extraction,
     Order,
@@ -33,6 +51,7 @@ from support_copilot.schemas import (
     Product,
     ProductInput,
     ProductList,
+    RefundProgress,
     RefundProposal,
     RouteDecision,
     RunCreated,
@@ -44,10 +63,40 @@ from support_copilot.schemas import (
 from support_copilot.worker import THREAD_LOCK_TIMEOUT_SECONDS, WorkerSettings, run_agent
 
 
+class FakeCustomerRepository:
+    def __init__(self) -> None:
+        self.customer = CustomerIdentity(id=1, name="Maya Chen", email="maya@example.test")
+        self.orders = [
+            CustomerOrder(
+                order_number="ORD-1001",
+                title="The Last Horizon",
+                media_format="4K UHD",
+                quantity=1,
+                ordered_at="2025-01-01 00:00:00+00",
+                status="delivered",
+                refund_progress="none",
+            )
+        ]
+
+    async def identify_customer(self, name: str, email: str) -> CustomerIdentity | None:
+        if (name, email) == (self.customer.name, self.customer.email):
+            return self.customer
+        return None
+
+    async def customer_orders(self, customer_id: int) -> list[CustomerOrder]:
+        return self.orders if customer_id == self.customer.id else []
+
+    async def customer_owns_order(self, customer_id: int, order_number: str) -> bool:
+        return customer_id == self.customer.id and any(
+            order.order_number == order_number for order in self.orders
+        )
+
+
 class FakeRedis:
     def __init__(self, run: dict[str, Any]) -> None:
         self.values = {f"run:{run['run_id']}": json.dumps(run)}
         self.enqueued: list[tuple[Any, ...]] = []
+        self.hashes: dict[str, dict[str, str]] = {}
         self.enqueue_error: Exception | None = None
         self.enqueue_result: object | None = object()
 
@@ -56,6 +105,13 @@ class FakeRedis:
 
     async def set(self, key: str, value: str) -> None:
         self.values[key] = value
+
+    async def hvals(self, key: str) -> list[str]:
+        return list(self.hashes.get(key, {}).values())
+
+    def pipeline(self, *, transaction: bool) -> "FakePipeline":
+        assert transaction is True
+        return FakePipeline(self)
 
     async def enqueue_job(self, *args: Any, **kwargs: Any) -> object:
         if self.enqueue_error:
@@ -73,7 +129,42 @@ class FakeRedis:
         yield
 
 
+class FakePipeline:
+    def __init__(self, redis: FakeRedis) -> None:
+        self.redis = redis
+        self.commands: list[tuple[str, tuple[Any, ...]]] = []
+
+    async def __aenter__(self) -> "FakePipeline":
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        pass
+
+    def set(self, *args: Any) -> None:
+        self.commands.append(("set", args))
+
+    def hdel(self, *args: Any) -> None:
+        self.commands.append(("hdel", args))
+
+    def hset(self, *args: Any) -> None:
+        self.commands.append(("hset", args))
+
+    async def execute(self) -> None:
+        for command, args in self.commands:
+            if command == "set":
+                self.redis.values[args[0]] = args[1]
+            elif command == "hdel":
+                self.redis.hashes.get(args[0], {}).pop(args[1], None)
+            else:
+                self.redis.hashes.setdefault(args[0], {})[args[1]] = args[2]
+
+
 CONTRACT_MODEL_NAMES = {
+    CustomerIdentity: "CustomerIdentity",
+    CustomerIdentificationRequest: "CustomerIdentificationRequest",
+    CustomerIdentificationResponse: "CustomerIdentificationResponse",
+    CustomerOrder: "CustomerOrder",
+    CustomerOrderList: "CustomerOrderList",
     Extraction: "StructuredExtraction",
     RouteDecision: "SupportRoute",
     RefundProposal: "ProposedRefund",
@@ -97,6 +188,8 @@ CONTRACT_MODEL_NAMES = {
 def contract_type(annotation: Any) -> Any:
     if annotation is RunState:
         return {"ref": "RunStatus"}
+    if annotation is RefundProgress:
+        return {"ref": "RefundProgress"}
     origin = get_origin(annotation)
     arguments = get_args(annotation)
     if origin is Literal:
@@ -127,6 +220,7 @@ def test_shared_api_contract_matches_backend_models() -> None:
 
     expected_types = {
         "RunStatus": {"enum": list(get_args(RunState.__value__))},
+        "RefundProgress": {"enum": list(get_args(RefundProgress.__value__))},
         **{
             frontend_name: contract_model(model)
             for model, frontend_name in CONTRACT_MODEL_NAMES.items()
@@ -208,6 +302,68 @@ async def test_list_runs_filters_awaiting_approval() -> None:
 
 
 @pytest.mark.asyncio
+async def test_customer_lookup_orders_and_scoped_run_access() -> None:
+    repository = FakeCustomerRepository()
+    repository.orders[0] = repository.orders[0].model_copy(update={"refund_progress": "approved"})
+    redis = FakeRedis({"run_id": "run-paused", "thread_id": "thread-1", "status": "queued"})
+    await write_run_status(
+        redis,
+        "run-paused",
+        status="awaiting_approval",
+        customer_id=1,
+        order_number="ORD-1001",
+    )
+    await write_run_status(
+        redis,
+        "run-paused-2",
+        status="awaiting_approval",
+        customer_id=1,
+        order_number="ORD-1001",
+    )
+
+    matched = await identify_customer(
+        CustomerIdentificationRequest(name="Maya Chen", email="maya@example.test"), repository
+    )
+    missing = await identify_customer(
+        CustomerIdentificationRequest(name="Maya Chen", email="wrong@example.test"), repository
+    )
+    orders = await list_customer_orders(1, "Maya Chen", "maya@example.test", redis, repository)
+    run = await get_customer_run(
+        1, "run-paused", "Maya Chen", "maya@example.test", redis, repository
+    )
+
+    assert matched.customer == repository.customer
+    assert missing.customer is None
+    assert orders.orders[0].refund_progress == "awaiting_approval"
+    assert run.run_id == "run-paused"
+
+    await write_run_status(redis, "run-paused", status="completed")
+    assert await redis.hvals(awaiting_orders_key(1)) == ["ORD-1001"]
+
+    await write_run_status(redis, "run-paused-2", status="completed")
+    assert await redis.hvals(awaiting_orders_key(1)) == []
+
+
+@pytest.mark.asyncio
+async def test_customer_run_rejects_an_order_outside_their_account() -> None:
+    repository = FakeCustomerRepository()
+    redis = FakeRedis({"run_id": "run-1", "thread_id": "thread-1", "status": "queued"})
+
+    with pytest.raises(HTTPException) as error:
+        await create_run(
+            RunRequest(
+                message="Please help",
+                customer=repository.customer,
+                order_number="ORD-9999",
+            ),
+            redis,
+            repository,
+        )
+
+    assert error.value.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_failed_decision_enqueue_leaves_run_retryable() -> None:
     run = {
         "run_id": "run-1",
@@ -253,15 +409,18 @@ class FakeBusinessCursor:
         if query.startswith("SELECT"):
             return
         if query.startswith("INSERT"):
+            fields = query.split("(", 1)[1].split(")", 1)[0].split(", ")
             self.row = {"id": max((row["id"] for row in self.rows), default=0) + 1}
-            self.row.update(dict(zip(("email", "name"), params, strict=True)))
+            self.row.update(dict(zip(fields, params, strict=True)))
             self.rows.append(self.row)
             return
         if query.startswith("UPDATE"):
+            assignments = query.split(" SET ", 1)[1].split(" WHERE ", 1)[0]
+            fields = [assignment.split(" = ", 1)[0] for assignment in assignments.split(", ")]
             row_id = params[-1]
             self.row = next((row for row in self.rows if row["id"] == row_id), None)
             if self.row is not None:
-                self.row.update(dict(zip(("email", "name"), params[:-1], strict=True)))
+                self.row.update(dict(zip(fields, params[:-1], strict=True)))
             return
         if query.startswith("DELETE"):
             row_id = params[0]
@@ -301,8 +460,8 @@ class FakeBusinessConnection:
 
 
 class FakeBusinessPool:
-    def __init__(self) -> None:
-        self.rows = [{"id": 1, "email": "maya@example.test", "name": "Maya Chen"}]
+    def __init__(self, rows: list[dict[str, Any]] | None = None) -> None:
+        self.rows = rows or [{"id": 1, "email": "maya@example.test", "name": "Maya Chen"}]
 
     def connection(self) -> FakeBusinessConnection:
         return FakeBusinessConnection(self.rows)
@@ -325,6 +484,87 @@ async def test_customer_crud_endpoints_use_the_business_pool() -> None:
     assert updated.name == "Sam R."
     assert deleted.status_code == 204
     assert pool.rows == [{"id": 1, "email": "maya@example.test", "name": "Maya Chen"}]
+
+
+@pytest.mark.asyncio
+async def test_product_crud_endpoints_use_the_business_pool() -> None:
+    pool = FakeBusinessPool(
+        [
+            {
+                "id": 1,
+                "title": "Demo disc",
+                "format": "DVD",
+                "sku": "DVD-1",
+                "price_cents": 999,
+            }
+        ]
+    )
+
+    listed = await list_products(pool)
+    created = await create_product(
+        ProductInput(title="Demo 4K", format="4K UHD", sku="UHD-2", price_cents=2999), pool
+    )
+    updated = await update_product(
+        created.id,
+        ProductInput(title="Demo 4K edited", format="4K UHD", sku="UHD-2", price_cents=2499),
+        pool,
+    )
+    deleted = await delete_product(created.id, pool)
+
+    assert [product.id for product in listed.products] == [1]
+    assert updated.title == "Demo 4K edited"
+    assert deleted.status_code == 204
+    assert [product["id"] for product in pool.rows] == [1]
+
+
+@pytest.mark.asyncio
+async def test_order_crud_endpoints_use_the_business_pool() -> None:
+    ordered_at = datetime.fromisoformat("2025-01-01T12:00:00+00:00")
+    pool = FakeBusinessPool(
+        [
+            {
+                "id": 1,
+                "order_number": "ORD-1",
+                "customer_id": 1,
+                "product_id": 1,
+                "quantity": 1,
+                "ordered_at": ordered_at,
+                "status": "delivered",
+                "refund_status": "none",
+            }
+        ]
+    )
+
+    listed = await list_orders(pool)
+    created = await create_order(
+        OrderInput(
+            order_number="ORD-2",
+            customer_id=1,
+            product_id=1,
+            quantity=2,
+            ordered_at=ordered_at,
+            status="processing",
+        ),
+        pool,
+    )
+    updated = await update_order(
+        created.id,
+        OrderInput(
+            order_number="ORD-2",
+            customer_id=1,
+            product_id=1,
+            quantity=2,
+            ordered_at=ordered_at,
+            status="shipped",
+        ),
+        pool,
+    )
+    deleted = await delete_order(created.id, pool)
+
+    assert [order.id for order in listed.orders] == [1]
+    assert updated.status == "shipped"
+    assert deleted.status_code == 204
+    assert [order["id"] for order in pool.rows] == [1]
 
 
 @pytest.mark.asyncio

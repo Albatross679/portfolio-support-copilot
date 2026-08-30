@@ -1,79 +1,425 @@
 {
   "types": {
-    "RunStatus": { "enum": ["queued", "running", "awaiting_approval", "completed", "failed"] },
+    "RunStatus": {
+      "enum": [
+        "queued",
+        "running",
+        "awaiting_approval",
+        "completed",
+        "failed"
+      ]
+    },
+    "RefundProgress": {
+      "enum": [
+        "none",
+        "awaiting_approval",
+        "approved",
+        "rejected"
+      ]
+    },
+    "CustomerIdentity": {
+      "properties": {
+        "id": "integer",
+        "name": "string",
+        "email": "string"
+      },
+      "required": [
+        "id",
+        "name",
+        "email"
+      ]
+    },
+    "CustomerIdentificationRequest": {
+      "properties": {
+        "name": "string",
+        "email": "string"
+      },
+      "required": [
+        "name",
+        "email"
+      ]
+    },
+    "CustomerIdentificationResponse": {
+      "properties": {
+        "customer": {
+          "nullable": {
+            "ref": "CustomerIdentity"
+          }
+        }
+      },
+      "required": []
+    },
+    "CustomerOrder": {
+      "properties": {
+        "order_number": "string",
+        "title": "string",
+        "media_format": "string",
+        "quantity": "integer",
+        "ordered_at": "string",
+        "status": "string",
+        "refund_progress": {
+          "ref": "RefundProgress"
+        }
+      },
+      "required": [
+        "order_number",
+        "title",
+        "media_format",
+        "quantity",
+        "ordered_at",
+        "status",
+        "refund_progress"
+      ]
+    },
+    "CustomerOrderList": {
+      "properties": {
+        "orders": {
+          "array": {
+            "ref": "CustomerOrder"
+          }
+        }
+      },
+      "required": [
+        "orders"
+      ]
+    },
     "StructuredExtraction": {
       "properties": {
-        "order_number": { "nullable": "string" },
-        "product_title": { "nullable": "string" },
-        "media_format": { "enum": ["Blu-ray", "DVD", "4K UHD", "box set", "unknown"] },
-        "issue_type": { "enum": ["billing", "shipping", "returns", "refund", "damaged_disc", "region_code", "preorder", "sales_query", "general"] },
-        "sentiment": { "enum": ["positive", "neutral", "frustrated", "angry"] }
+        "order_number": {
+          "nullable": "string"
+        },
+        "product_title": {
+          "nullable": "string"
+        },
+        "media_format": {
+          "enum": [
+            "Blu-ray",
+            "DVD",
+            "4K UHD",
+            "box set",
+            "unknown"
+          ]
+        },
+        "issue_type": {
+          "enum": [
+            "billing",
+            "shipping",
+            "returns",
+            "refund",
+            "damaged_disc",
+            "region_code",
+            "preorder",
+            "sales_query",
+            "general"
+          ]
+        },
+        "sentiment": {
+          "enum": [
+            "positive",
+            "neutral",
+            "frustrated",
+            "angry"
+          ]
+        }
       },
       "required": []
     },
     "SupportRoute": {
-      "properties": { "lane": { "enum": ["billing", "shipping", "returns", "general"] }, "handler": { "enum": ["rag", "sql", "refund"] }, "rationale": "string" },
-      "required": ["lane", "handler", "rationale"]
+      "properties": {
+        "lane": {
+          "enum": [
+            "billing",
+            "shipping",
+            "returns",
+            "general"
+          ]
+        },
+        "handler": {
+          "enum": [
+            "rag",
+            "sql",
+            "refund"
+          ]
+        },
+        "rationale": "string"
+      },
+      "required": [
+        "lane",
+        "handler",
+        "rationale"
+      ]
     },
     "ProposedRefund": {
-      "properties": { "order_number": "string", "amount_cents": "integer", "currency": { "enum": ["USD"] }, "reason": "string" },
-      "required": ["order_number", "amount_cents", "reason"]
+      "properties": {
+        "order_number": "string",
+        "amount_cents": "integer",
+        "currency": {
+          "enum": [
+            "USD"
+          ]
+        },
+        "reason": "string"
+      },
+      "required": [
+        "order_number",
+        "amount_cents",
+        "reason"
+      ]
     },
     "SupportRun": {
-      "properties": { "run_id": "string", "thread_id": "string", "status": { "ref": "RunStatus" }, "created_at": { "nullable": "string" }, "message_preview": { "nullable": "string" }, "extraction": { "nullable": { "ref": "StructuredExtraction" } }, "route": { "nullable": { "ref": "SupportRoute" } }, "proposed_refund": { "nullable": { "ref": "ProposedRefund" } }, "answer": { "nullable": "string" }, "error": { "nullable": "string" } },
-      "required": ["run_id", "thread_id", "status"]
+      "properties": {
+        "run_id": "string",
+        "thread_id": "string",
+        "status": {
+          "ref": "RunStatus"
+        },
+        "created_at": {
+          "nullable": "string"
+        },
+        "message_preview": {
+          "nullable": "string"
+        },
+        "extraction": {
+          "nullable": {
+            "ref": "StructuredExtraction"
+          }
+        },
+        "route": {
+          "nullable": {
+            "ref": "SupportRoute"
+          }
+        },
+        "proposed_refund": {
+          "nullable": {
+            "ref": "ProposedRefund"
+          }
+        },
+        "answer": {
+          "nullable": "string"
+        },
+        "error": {
+          "nullable": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "thread_id",
+        "status"
+      ]
     },
     "CreateRunRequest": {
-      "properties": { "message": "string", "thread_id": { "nullable": "string" } },
-      "required": ["message"]
+      "properties": {
+        "message": "string",
+        "thread_id": {
+          "nullable": "string"
+        },
+        "customer": {
+          "nullable": {
+            "ref": "CustomerIdentity"
+          }
+        },
+        "order_number": {
+          "nullable": "string"
+        }
+      },
+      "required": [
+        "message"
+      ]
     },
     "CreateRunResponse": {
-      "properties": { "run_id": "string", "thread_id": "string" },
-      "required": ["run_id", "thread_id"]
+      "properties": {
+        "run_id": "string",
+        "thread_id": "string"
+      },
+      "required": [
+        "run_id",
+        "thread_id"
+      ]
     },
     "DecisionRequest": {
-      "properties": { "decision": { "enum": ["approve", "reject"] } },
-      "required": ["decision"]
+      "properties": {
+        "decision": {
+          "enum": [
+            "approve",
+            "reject"
+          ]
+        }
+      },
+      "required": [
+        "decision"
+      ]
     },
     "RunListResponse": {
-      "properties": { "runs": { "array": { "ref": "SupportRun" } }, "total": "integer", "limit": "integer", "offset": "integer" },
-      "required": ["runs", "total", "limit", "offset"]
+      "properties": {
+        "runs": {
+          "array": {
+            "ref": "SupportRun"
+          }
+        },
+        "total": "integer",
+        "limit": "integer",
+        "offset": "integer"
+      },
+      "required": [
+        "runs",
+        "total",
+        "limit",
+        "offset"
+      ]
     },
     "CustomerInput": {
-      "properties": { "email": "string", "name": "string" },
-      "required": ["email", "name"]
+      "properties": {
+        "email": "string",
+        "name": "string"
+      },
+      "required": [
+        "email",
+        "name"
+      ]
     },
     "Customer": {
-      "properties": { "email": "string", "name": "string", "id": "integer" },
-      "required": ["email", "name", "id"]
+      "properties": {
+        "email": "string",
+        "name": "string",
+        "id": "integer"
+      },
+      "required": [
+        "email",
+        "name",
+        "id"
+      ]
     },
     "CustomerListResponse": {
-      "properties": { "customers": { "array": { "ref": "Customer" } } },
-      "required": ["customers"]
+      "properties": {
+        "customers": {
+          "array": {
+            "ref": "Customer"
+          }
+        }
+      },
+      "required": [
+        "customers"
+      ]
     },
     "ProductInput": {
-      "properties": { "title": "string", "format": { "enum": ["Blu-ray", "DVD", "4K UHD", "box set"] }, "sku": "string", "price_cents": "integer" },
-      "required": ["title", "format", "sku", "price_cents"]
+      "properties": {
+        "title": "string",
+        "format": {
+          "enum": [
+            "Blu-ray",
+            "DVD",
+            "4K UHD",
+            "box set"
+          ]
+        },
+        "sku": "string",
+        "price_cents": "integer"
+      },
+      "required": [
+        "title",
+        "format",
+        "sku",
+        "price_cents"
+      ]
     },
     "Product": {
-      "properties": { "title": "string", "format": { "enum": ["Blu-ray", "DVD", "4K UHD", "box set"] }, "sku": "string", "price_cents": "integer", "id": "integer" },
-      "required": ["title", "format", "sku", "price_cents", "id"]
+      "properties": {
+        "title": "string",
+        "format": {
+          "enum": [
+            "Blu-ray",
+            "DVD",
+            "4K UHD",
+            "box set"
+          ]
+        },
+        "sku": "string",
+        "price_cents": "integer",
+        "id": "integer"
+      },
+      "required": [
+        "title",
+        "format",
+        "sku",
+        "price_cents",
+        "id"
+      ]
     },
     "ProductListResponse": {
-      "properties": { "products": { "array": { "ref": "Product" } } },
-      "required": ["products"]
+      "properties": {
+        "products": {
+          "array": {
+            "ref": "Product"
+          }
+        }
+      },
+      "required": [
+        "products"
+      ]
     },
     "OrderInput": {
-      "properties": { "order_number": "string", "customer_id": "integer", "product_id": "integer", "quantity": "integer", "ordered_at": "string", "status": "string", "refund_status": { "enum": ["none", "approved", "rejected"] } },
-      "required": ["order_number", "customer_id", "product_id", "quantity", "ordered_at", "status"]
+      "properties": {
+        "order_number": "string",
+        "customer_id": "integer",
+        "product_id": "integer",
+        "quantity": "integer",
+        "ordered_at": "string",
+        "status": "string",
+        "refund_status": {
+          "enum": [
+            "none",
+            "approved",
+            "rejected"
+          ]
+        }
+      },
+      "required": [
+        "order_number",
+        "customer_id",
+        "product_id",
+        "quantity",
+        "ordered_at",
+        "status"
+      ]
     },
     "Order": {
-      "properties": { "order_number": "string", "customer_id": "integer", "product_id": "integer", "quantity": "integer", "ordered_at": "string", "status": "string", "refund_status": { "enum": ["none", "approved", "rejected"] }, "id": "integer" },
-      "required": ["order_number", "customer_id", "product_id", "quantity", "ordered_at", "status", "id"]
+      "properties": {
+        "order_number": "string",
+        "customer_id": "integer",
+        "product_id": "integer",
+        "quantity": "integer",
+        "ordered_at": "string",
+        "status": "string",
+        "refund_status": {
+          "enum": [
+            "none",
+            "approved",
+            "rejected"
+          ]
+        },
+        "id": "integer"
+      },
+      "required": [
+        "order_number",
+        "customer_id",
+        "product_id",
+        "quantity",
+        "ordered_at",
+        "status",
+        "id"
+      ]
     },
     "OrderListResponse": {
-      "properties": { "orders": { "array": { "ref": "Order" } } },
-      "required": ["orders"]
+      "properties": {
+        "orders": {
+          "array": {
+            "ref": "Order"
+          }
+        }
+      },
+      "required": [
+        "orders"
+      ]
     }
   }
 }

@@ -66,6 +66,19 @@ dd { color: #1e2930; margin: 0; }
 .button-row { border-top: 1px solid #e6e9e5; display: flex; flex-wrap: wrap; gap: 10px; padding: 18px 27px; }
 .follow-up-button, .follow-up-note { margin-top: 16px; }
 .follow-up-note { font-size: 0.9rem; }
+
+.orders-section, .support-request { margin-top: 34px; }
+.order-list { display: grid; gap: 12px; }
+.order-card { background: #fff; border: 1px solid #dce0da; border-radius: 10px; display: grid; gap: 18px; grid-template-columns: minmax(180px, 0.9fr) minmax(0, 1.6fr); padding: 20px; }
+.order-card > div { display: grid; gap: 6px; }
+.order-card strong { color: #173d42; font-size: 0.98rem; }
+.order-card span { color: #536164; }
+.order-card dl { gap: 7px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.order-card dl div { grid-template-columns: 72px 1fr; }
+.refund-awaiting_approval { color: #a14531; font-weight: 700; }
+.refund-approved { color: #28745c; font-weight: 700; }
+.refund-rejected { color: #8b2c21; font-weight: 700; }
+
 .employee-nav { border-bottom: 1px solid #d9ddd7; display: flex; gap: 18px; }
 .employee-nav a { color: #536164; font-size: 0.88rem; padding: 14px 0; text-decoration: none; }
 .employee-nav a.active, .employee-nav a:hover { color: #173d42; font-weight: 700; }

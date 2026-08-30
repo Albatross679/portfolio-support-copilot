@@ -3,8 +3,13 @@ import type {
   CreateRunRequest,
   CreateRunResponse,
   Customer,
+  CustomerIdentificationRequest,
+  CustomerIdentificationResponse,
+  CustomerIdentity,
   CustomerInput,
   CustomerListResponse,
+  CustomerOrder,
+  CustomerOrderList,
   DecisionRequest,
   Order,
   OrderInput,
@@ -25,8 +30,13 @@ export type {
   CreateRunRequest,
   CreateRunResponse,
   Customer,
+  CustomerIdentificationRequest,
+  CustomerIdentificationResponse,
+  CustomerIdentity,
   CustomerInput,
   CustomerListResponse,
+  CustomerOrder,
+  CustomerOrderList,
   DecisionRequest,
   Order,
   OrderInput,
@@ -49,6 +59,9 @@ export interface SupportApi {
   getRun(runId: string): Promise<SupportRun>;
   listRuns(status?: RunStatus, limit?: number, offset?: number): Promise<RunListResponse>;
   decideRun(runId: string, request: DecisionRequest): Promise<DecisionResponse>;
+  identifyCustomer(request: CustomerIdentificationRequest): Promise<CustomerIdentificationResponse>;
+  listCustomerOrders(customer: CustomerIdentity): Promise<CustomerOrderList>;
+  getCustomerRun(customer: CustomerIdentity, runId: string): Promise<SupportRun>;
   listCustomers(): Promise<CustomerListResponse>;
   createCustomer(request: CustomerInput): Promise<Customer>;
   updateCustomer(id: number, request: CustomerInput): Promise<Customer>;

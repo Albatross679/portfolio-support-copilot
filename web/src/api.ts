@@ -2,7 +2,11 @@ import type {
   CreateRunRequest,
   CreateRunResponse,
   Customer,
+  CustomerIdentificationRequest,
+  CustomerIdentificationResponse,
+  CustomerIdentity,
   CustomerInput,
+  CustomerOrderList,
   DecisionRequest,
   DecisionResponse,
   Order,
@@ -44,6 +48,9 @@ export const httpApi: SupportApi = {
   getRun: (runId: string) => request<SupportRun>(`/runs/${encodeURIComponent(runId)}`),
   listRuns: (status?: RunStatus, limit = 25, offset = 0) => request<RunListResponse>(`/runs?${new URLSearchParams({ ...(status ? { status } : {}), limit: String(limit), offset: String(offset) })}`),
   decideRun: (runId: string, body: DecisionRequest) => request<DecisionResponse>(`/runs/${encodeURIComponent(runId)}/decision`, { method: "POST", body: JSON.stringify(body) }),
+  identifyCustomer: (body: CustomerIdentificationRequest) => request<CustomerIdentificationResponse>("/customers/identify", { method: "POST", body: JSON.stringify(body) }),
+  listCustomerOrders: (customer: CustomerIdentity) => request<CustomerOrderList>(`/customers/${customer.id}/orders?name=${encodeURIComponent(customer.name)}&email=${encodeURIComponent(customer.email)}`),
+  getCustomerRun: (customer: CustomerIdentity, runId: string) => request<SupportRun>(`/customers/${customer.id}/runs/${encodeURIComponent(runId)}?name=${encodeURIComponent(customer.name)}&email=${encodeURIComponent(customer.email)}`),
   listCustomers: () => request("/customers"),
   createCustomer: (body) => request("/customers", { method: "POST", body: JSON.stringify(body) }),
   updateCustomer: (id, body) => request(`/customers/${id}`, { method: "PUT", body: JSON.stringify(body) }),
@@ -87,13 +94,27 @@ function clone<T>(value: T): T {
 
 export function createMockApi(): SupportApi {
   let runs = clone(initialRuns);
+  const runCustomers = new Map<string, number>();
+  const customerIdentities: CustomerIdentity[] = [
+    { id: 1, name: "Maya Chen", email: "maya@example.test" },
+    { id: 2, name: "Sam Rivera", email: "sam@example.test" },
+    { id: 3, name: "Lee Patel", email: "lee@example.test" },
+  ];
+  const customerOrders: Record<number, CustomerOrderList> = {
+    1: { orders: [
+      { order_number: "ORD-1001", title: "The Last Horizon", media_format: "4K UHD", quantity: 1, ordered_at: "2025-02-14T12:00:00Z", status: "delivered", refund_progress: "none" },
+      { order_number: "ORD-1004", title: "Cinema Classics Vol. 1", media_format: "box set", quantity: 1, ordered_at: "2025-02-05T12:00:00Z", status: "delivered", refund_progress: "none" },
+    ] },
+    2: { orders: [{ order_number: "ORD-1002", title: "The Last Horizon", media_format: "Blu-ray", quantity: 1, ordered_at: "2025-02-10T12:00:00Z", status: "shipped", refund_progress: "none" }] },
+    3: { orders: [{ order_number: "ORD-1003", title: "Midnight Archive", media_format: "DVD", quantity: 2, ordered_at: "2025-01-13T12:00:00Z", status: "delivered", refund_progress: "rejected" }] },
+  };
   let customers: Customer[] = [{ id: 1, name: "Maya Chen", email: "maya@example.test" }];
   let products: Product[] = [{ id: 1, title: "The Last Horizon", format: "4K UHD", sku: "TLH-4K", price_cents: 2999 }];
   let orders: Order[] = [{ id: 1, order_number: "ORD-1001", customer_id: 1, product_id: 1, quantity: 1, ordered_at: "2025-01-01T12:00:00Z", status: "delivered", refund_status: "none" }];
   let sequence = 3000;
 
   return {
-    async createRun({ message, thread_id }) {
+    async createRun({ message, thread_id, customer, order_number }) {
       const runId = `run_demo_${sequence++}`;
       const nextThreadId = thread_id ?? `thread_demo_${sequence}`;
       const isRefund = /refund|money back|reimburse/i.test(message);
@@ -104,15 +125,16 @@ export function createMockApi(): SupportApi {
         created_at: new Date().toISOString(),
         message_preview: message.slice(0, 200),
         extraction: {
-          order_number: message.match(/(?:order\s*#?)(\d+)/i)?.[1] ?? null,
+          order_number: order_number ?? message.match(/(?:order\s*#?)(\d+)/i)?.[1] ?? null,
           product_title: /inception/i.test(message) ? "Inception" : null,
           media_format: /4k|uhd/i.test(message) ? "4K UHD" : /blu-?ray/i.test(message) ? "Blu-ray" : /dvd/i.test(message) ? "DVD" : "unknown",
           issue_type: isRefund ? "refund" : "general",
           sentiment: /please|thanks/i.test(message) ? "positive" : "neutral",
         },
         route: isRefund ? { lane: "returns", handler: "refund", rationale: "Customer requested a refund." } : { lane: "general", handler: "rag", rationale: "General policy question." },
-        ...(isRefund ? { proposed_refund: { order_number: message.match(/(?:order\s*#?)(\d+)/i)?.[1] ?? "unknown", amount_cents: 1999, currency: "USD" as const, reason: "Customer requested a simulated refund" } } : { answer: "Our return policy allows unopened physical media to be returned within 30 days of delivery." }),
+        ...(isRefund ? { proposed_refund: { order_number: order_number ?? message.match(/(?:order\s*#?)(\d+)/i)?.[1] ?? "unknown", amount_cents: 1999, currency: "USD" as const, reason: "Customer requested a simulated refund" } } : { answer: "Our return policy allows unopened physical media to be returned within 30 days of delivery." }),
       });
+      if (customer) runCustomers.set(runId, customer.id);
       return { run_id: runId, thread_id: nextThreadId };
     },
     async getRun(runId) {
@@ -130,6 +152,14 @@ export function createMockApi(): SupportApi {
       if (run.status !== "awaiting_approval") throw new Error("Run is not awaiting approval");
       run.status = "completed";
       run.answer = decision === "approve" ? `Refund of ${run.proposed_refund?.currency} ${((run.proposed_refund?.amount_cents ?? 0) / 100).toFixed(2)} approved. The customer has been notified.` : "The refund request was reviewed and not approved. The customer has been notified.";
+      return clone(run);
+    },
+    async identifyCustomer({ name, email }) { return { customer: clone(customerIdentities.find((item) => item.name === name && item.email === email) ?? null) }; },
+    async listCustomerOrders(customer) { return clone(customerOrders[customer.id] ?? { orders: [] }); },
+    async getCustomerRun(customer, runId) {
+      if (runCustomers.get(runId) !== customer.id) throw new Error("Run not found");
+      const run = runs.find((item) => item.run_id === runId);
+      if (!run) throw new Error("Run not found");
       return clone(run);
     },
     async listCustomers() { return { customers: clone(customers) }; },
