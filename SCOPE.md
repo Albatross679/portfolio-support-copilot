@@ -83,9 +83,9 @@ Two data services total: Postgres and Redis.
 
 A React and TypeScript console split into customer and employee areas:
 
-- The customer area identifies a demo customer by name and email, lists their orders,
-  submits support messages and follow-ups, and shows the resulting answers. The lookup
-  is not authentication.
+- The customer area accepts support messages without identification. Customers can use
+  an optional name and email lookup to list orders, attach an order to a message, and
+  show refund status. The lookup is not authentication.
 - The employee area at `/employees` lists recent runs newest first and opens the same
   run detail view.
 - The employee approval inbox lists paused runs with approve and reject buttons that

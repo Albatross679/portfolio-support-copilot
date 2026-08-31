@@ -1,6 +1,6 @@
 # Support Copilot console
 
-A React and TypeScript console for the portfolio-support-copilot backend. The customer portal identifies a demo customer, lists their orders, submits support requests, and sends follow-ups. The employee area at `/employees` monitors recent runs, handles refund approvals, edits demo business data, and sets the daily run limit.
+A React and TypeScript console for the portfolio-support-copilot backend. The customer portal accepts anonymous support requests. Its optional customer lookup lists orders, attaches an order to a request, and shows refund status. The employee area at `/employees` monitors recent runs, handles refund approvals, edits demo business data, and sets the daily run limit.
 
 ## Run locally
 
