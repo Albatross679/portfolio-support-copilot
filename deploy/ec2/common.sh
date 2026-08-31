@@ -13,8 +13,14 @@ readonly REMOTE_APP_DIR="/opt/portfolio-support-copilot"
 
 source_aws_credentials() {
   # The deploy credentials and OpenRouter key are intentionally kept outside this repository.
+  # ~/.zshrc can contain zsh-only commands, so its status is not the credential gate.
   # shellcheck disable=SC1090
+  set +e
   source "${HOME}/.zshrc" >/dev/null 2>&1
+  set -e
+  if [[ -z "${AWS_ACCESS_KEY_ID:-}" || -z "${AWS_SECRET_ACCESS_KEY:-}" ]]; then
+    echo "AWS credentials are missing after loading ~/.zshrc." >&2
+  fi
   : "${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID must be exported in ~/.zshrc}"
   : "${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY must be exported in ~/.zshrc}"
 }
