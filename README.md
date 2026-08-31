@@ -25,7 +25,7 @@ FastAPI serves the built console and accepts and reports runs. The arq worker ow
 - `GET /runs?status=awaiting_approval` lists paused runs for the approval inbox. `GET /runs?limit=25&offset=0` lists runs newest first for employee monitoring.
 - `POST /runs/{run_id}/decision` accepts `{ "decision": "approve" | "reject" }`, enqueues a resume job, and returns `202` with the current run state.
 - `GET` and `PUT /settings/daily-run-limit` read and update the employee-controlled global daily run limit with `{ "daily_run_limit": number }`.
-- Customer endpoints identify a demo customer by name and email, list that customer's orders, and limit customer run detail to runs created for that customer. This lookup is not authentication.
+- Customer endpoints identify a demo customer by name and email, list that customer's orders, and limit customer run detail and follow-ups to runs created for that customer. This lookup is not authentication. These checks only separate callers who provide different customer records. A caller who knows another customer's name and email can identify as that customer. Authentication remains future work.
 - Employee data endpoints provide create, read, update, and delete operations for `/customers`, `/products`, and `/orders`. See [`web/API.md`](web/API.md) for payloads and conflict responses.
 
 ## Run locally
