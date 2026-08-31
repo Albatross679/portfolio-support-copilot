@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
@@ -68,4 +69,24 @@ it("lists orders and sends the selected order with a support message", async () 
 
   expect(onRunCreated).toHaveBeenCalledWith("run_demo_3000");
   expect((await client.getCustomerRun(maya, "run_demo_3000")).extraction?.order_number).toBe("ORD-1004");
+});
+
+it("clears the selected order when customer identification is cleared", async () => {
+  const user = userEvent.setup();
+  const client = createMockApi();
+  const createRun = vi.spyOn(client, "createRun");
+
+  function Portal() {
+    const [customer, setCustomer] = useState<CustomerIdentity | undefined>(maya);
+    return <CustomerPortalView client={client} customer={customer} onIdentified={setCustomer} onSignedOut={() => setCustomer(undefined)} onRunCreated={vi.fn()} />;
+  }
+
+  render(<Portal />);
+  await screen.findByText("ORD-1004");
+  await user.selectOptions(screen.getByLabelText("What is this about?"), "ORD-1004");
+  await user.click(screen.getByRole("button", { name: "Use a different customer" }));
+  await user.type(screen.getByLabelText("Message"), "What is your return policy?");
+  await user.click(screen.getByRole("button", { name: "Start support request" }));
+
+  expect(createRun).toHaveBeenCalledWith({ message: "What is your return policy?", customer: undefined });
 });

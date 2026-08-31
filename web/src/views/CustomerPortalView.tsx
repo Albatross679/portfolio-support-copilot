@@ -33,6 +33,7 @@ export function CustomerPortalView({
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    setOrderNumber("");
     if (!customer) {
       setOrders([]);
       return;

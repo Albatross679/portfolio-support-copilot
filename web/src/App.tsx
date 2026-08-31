@@ -15,6 +15,10 @@ function currentPath(): string {
   return window.location.pathname;
 }
 
+function currentThreadId(): string | undefined {
+  return new URLSearchParams(window.location.search).get("thread_id") ?? undefined;
+}
+
 function savedCustomer(): CustomerIdentity | undefined {
   try {
     const value = window.localStorage.getItem(CUSTOMER_STORAGE_KEY);
@@ -31,10 +35,14 @@ function navigate(path: string) {
 
 export default function App() {
   const [path, setPath] = useState(currentPath);
+  const [threadId, setThreadId] = useState(currentThreadId);
   const [customer, setCustomer] = useState<CustomerIdentity | undefined>(savedCustomer);
 
   useEffect(() => {
-    const updatePath = () => setPath(currentPath());
+    const updatePath = () => {
+      setPath(currentPath());
+      setThreadId(currentThreadId());
+    };
     window.addEventListener("popstate", updatePath);
     return () => window.removeEventListener("popstate", updatePath);
   }, []);
@@ -52,16 +60,22 @@ export default function App() {
   const employeeRunId = path.match(/^\/employees\/runs\/([^/]+)$/)?.[1];
   const customerRunId = path.match(/^\/customer\/runs\/([^/]+)$/)?.[1];
   const customerFollowUpThreadId = path.match(/^\/customer\/threads\/([^/]+)\/follow-up$/)?.[1];
-  const employeePath = path.startsWith("/employees") || path === "/approvals";
+  const employeePath = path.startsWith("/employees") || path === "/employee" || path === "/approvals";
   const customerClient = customer
     ? {
         ...api,
         createRun: (request: Parameters<typeof api.createRun>[0]) => api.createRun({ ...request, customer }),
-        getRun: (id: string) => api.getCustomerRun(customer, id),
+        getRun: async (id: string) => {
+          try {
+            return await api.getCustomerRun(customer, id);
+          } catch {
+            return api.getRun(id);
+          }
+        },
       }
     : api;
   const view = employeeRunId
-    ? <RunView runId={decodeURIComponent(employeeRunId)} />
+    ? <RunView runId={decodeURIComponent(employeeRunId)} onFollowUp={(id) => navigate(`/employee?thread_id=${encodeURIComponent(id)}`)} />
     : customerFollowUpThreadId
       ? customer
         ? <SubmitView client={customerClient} threadId={decodeURIComponent(customerFollowUpThreadId)} onClearThread={() => navigate("/")} onRunCreated={(id) => navigate(`/customer/runs/${encodeURIComponent(id)}`)} />
@@ -74,6 +88,8 @@ export default function App() {
           ? <BusinessDataView />
           : path === "/employees/settings"
             ? <DailyRunLimitView />
+            : path === "/employee"
+              ? <SubmitView threadId={threadId} onClearThread={() => navigate("/employee")} onRunCreated={(id) => navigate(`/employees/runs/${encodeURIComponent(id)}`)} />
             : path === "/employees" || path === "/employees/runs"
             ? <RunMonitorView onOpenRun={(id) => navigate(`/employees/runs/${encodeURIComponent(id)}`)} />
             : <CustomerPortalView customer={customer} onIdentified={identify} onSignedOut={signOut} onRunCreated={(id) => navigate(`/customer/runs/${encodeURIComponent(id)}`)} />;
