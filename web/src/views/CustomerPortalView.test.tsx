@@ -30,6 +30,17 @@ it("shows a lookup failure for a wrong name and email pair", async () => {
   expect(await screen.findByRole("alert")).toHaveTextContent("could not find a customer");
 });
 
+it("shows the daily budget message when a customer request is refused", async () => {
+  const user = userEvent.setup();
+  const client = { ...createMockApi(), createRun: async () => { throw new Error("Daily demo budget is used up, come back tomorrow."); } };
+  render(<CustomerPortalView client={client} customer={maya} onIdentified={vi.fn()} onSignedOut={vi.fn()} onRunCreated={vi.fn()} />);
+
+  await user.type(screen.getByLabelText("Message"), "Please help with my order.");
+  await user.click(screen.getByRole("button", { name: "Start support request" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Daily demo budget is used up, come back tomorrow.");
+});
+
 it("lists orders and sends the selected order with a support message", async () => {
   const user = userEvent.setup();
   const client = createMockApi();

@@ -1,4 +1,5 @@
 import json
+import math
 import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -24,6 +25,7 @@ from support_copilot.schemas import (
     CustomerInput,
     CustomerList,
     CustomerOrderList,
+    DailyRunLimit,
     DecisionRequest,
     Order,
     OrderInput,
@@ -40,6 +42,16 @@ from support_copilot.schemas import (
 
 settings = get_settings()
 CONSOLE_DIST = Path.cwd() / "web" / "dist"
+DAILY_RUN_KEY_PREFIX = "daily:runs:"
+DAILY_RUN_CAP_SCRIPT = """
+local current = tonumber(redis.call('GET', KEYS[1]) or '0')
+if current >= tonumber(ARGV[1]) then return 0 end
+current = redis.call('INCR', KEYS[1])
+if current == 1 then redis.call('EXPIRE', KEYS[1], ARGV[2]) end
+return current
+"""
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.redis = await create_pool(RedisSettings.from_dsn(settings.redis_url))
@@ -71,6 +83,30 @@ def business_pool(request: Request) -> AsyncConnectionPool:
 
 def store_repository(request: Request) -> StoreRepository:
     return request.app.state.repository
+
+
+def daily_run_key(now: datetime) -> str:
+    return f"{DAILY_RUN_KEY_PREFIX}{now.astimezone(UTC).date().isoformat()}"
+
+
+def seconds_until_next_utc_day(now: datetime) -> int:
+    utc_now = now.astimezone(UTC)
+    tomorrow = utc_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return max(1, math.ceil((tomorrow.timestamp() + 86_400) - utc_now.timestamp()))
+
+
+async def claim_daily_run(redis: Any, limit: int, now: datetime | None = None) -> bool:
+    if limit == 0:
+        return True
+    now = now or datetime.now(UTC)
+    claimed = await redis.eval(
+        DAILY_RUN_CAP_SCRIPT,
+        1,
+        daily_run_key(now),
+        limit,
+        seconds_until_next_utc_day(now),
+    )
+    return bool(claimed)
 
 
 async def read_run(redis: Any, run_id: str) -> dict[str, Any]:
@@ -187,6 +223,20 @@ async def list_customer_orders(
     )
 
 
+@app.get("/settings/daily-run-limit", response_model=DailyRunLimit)
+async def get_daily_run_limit(
+    repository: StoreRepository = Depends(store_repository),
+) -> DailyRunLimit:
+    return DailyRunLimit(daily_run_limit=await repository.daily_run_limit(settings.daily_run_limit))
+
+
+@app.put("/settings/daily-run-limit", response_model=DailyRunLimit)
+async def update_daily_run_limit(
+    payload: DailyRunLimit, repository: StoreRepository = Depends(store_repository)
+) -> DailyRunLimit:
+    return DailyRunLimit(daily_run_limit=await repository.set_daily_run_limit(payload.daily_run_limit))
+
+
 @app.post("/runs", response_model=RunCreated, status_code=status.HTTP_202_ACCEPTED)
 async def create_run(
     payload: RunRequest,
@@ -209,6 +259,12 @@ async def create_run(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="An order selection requires a customer identity",
+        )
+    daily_run_limit = await repository.daily_run_limit(settings.daily_run_limit)
+    if not await claim_daily_run(redis, daily_run_limit):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Daily demo budget is used up, come back tomorrow.",
         )
     run_id = str(uuid.uuid4())
     thread_id = payload.thread_id or str(uuid.uuid4())

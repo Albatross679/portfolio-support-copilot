@@ -20,10 +20,11 @@ FastAPI serves the built console and accepts and reports runs. The arq worker ow
 
 ## API contract
 
-- `POST /runs` accepts `{ "message": "...", "thread_id": "optional", "customer": "optional identity", "order_number": "optional" }` and returns `202` with `{ "run_id", "thread_id" }`.
+- `POST /runs` accepts `{ "message": "...", "thread_id": "optional", "customer": "optional identity", "order_number": "optional" }` and returns `202` with `{ "run_id", "thread_id" }`. It returns `429` with `{ "detail": "Daily demo budget is used up, come back tomorrow." }` when the global daily demo budget is exhausted.
 - `GET /runs/{run_id}` returns queued, running, awaiting_approval, completed, or failed state. Runs use `answer`, `extraction.media_format`, a `{ lane, handler, rationale }` route object, and integer refund `amount_cents`. Paused runs include `proposed_refund`.
 - `GET /runs?status=awaiting_approval` lists paused runs for the approval inbox. `GET /runs?limit=25&offset=0` lists runs newest first for employee monitoring.
 - `POST /runs/{run_id}/decision` accepts `{ "decision": "approve" | "reject" }`, enqueues a resume job, and returns `202` with the current run state.
+- `GET` and `PUT /settings/daily-run-limit` read and update the employee-controlled global daily run limit with `{ "daily_run_limit": number }`.
 - Customer endpoints identify a demo customer by name and email, list that customer's orders, and limit customer run detail to runs created for that customer. This lookup is not authentication.
 - Employee data endpoints provide create, read, update, and delete operations for `/customers`, `/products`, and `/orders`. See [`web/API.md`](web/API.md) for payloads and conflict responses.
 
@@ -39,6 +40,8 @@ For console development, run `cd web && npm install && npm run dev`. Leave `VITE
 The `init` Compose service applies the schema, seeds fake business data only when the business tables are empty, creates LangGraph checkpoint tables, and embeds documents in `docs/help/`. It exits successfully without a key so the API and worker can still boot, but RAG runs require embeddings and therefore an OpenRouter key. On later starts, unchanged documents are skipped; changed, added, or removed documents are synchronized automatically. Re-ingest documents manually with `docker compose run --rm init python scripts/ingest_help.py`.
 
 `EMBEDDING_DIM` defaults to 1536, which matches `openai/text-embedding-3-small`. When changing the embedding model or its output size, set both `OPENROUTER_EMBEDDING_MODEL` and `EMBEDDING_DIM`; the changed fingerprint automatically re-ingests every help document. Every init run with `RESET_DEMO_DATA=1` truncates and reseeds the business tables. This does not reset help-document embeddings.
+
+`DAILY_RUN_LIMIT` defaults to 50 and seeds the global UTC-day run cap only when no employee setting exists yet. The employee console can change the active limit at runtime, and `0` disables it for local development and tests. Redis increments the global counter when a run is queued and expires its UTC-day key at midnight. This deliberate demo-cost safeguard does not replace the future API-key authentication and per-key rate limiting work.
 
 ## Development and tests
 
@@ -57,7 +60,7 @@ The end-to-end test deliberately uses the Compose stack rather than testcontaine
 ## Next
 
 - Authentication and authorization for the employee console. The `/employees` route is intentionally unauthenticated in this demo.
-- API-key authentication and per-key rate limiting.
+- API-key authentication and per-key rate limiting. The global daily demo cap is the deliberate exception documented above.
 - Optimistic locking or another transaction policy for concurrent employee data edits.
 - Structured logging with request tracing and a metrics endpoint.
 - Live streaming with server-sent events for agent progress.

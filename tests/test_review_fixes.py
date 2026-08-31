@@ -1,7 +1,7 @@
 import asyncio
 import json
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from types import NoneType, SimpleNamespace, UnionType
 from typing import Any, Literal, get_args, get_origin
@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel
 
 from support_copilot.api import (
+    claim_daily_run,
     create_customer,
     create_order,
     create_product,
@@ -20,6 +21,7 @@ from support_copilot.api import (
     delete_order,
     delete_product,
     get_customer_run,
+    get_daily_run_limit,
     get_run,
     identify_customer,
     list_customer_orders,
@@ -28,6 +30,7 @@ from support_copilot.api import (
     list_products,
     list_runs,
     update_customer,
+    update_daily_run_limit,
     update_order,
     update_product,
 )
@@ -43,6 +46,7 @@ from support_copilot.schemas import (
     CustomerList,
     CustomerOrder,
     CustomerOrderList,
+    DailyRunLimit,
     DecisionRequest,
     Extraction,
     Order,
@@ -66,6 +70,7 @@ from support_copilot.worker import THREAD_LOCK_TIMEOUT_SECONDS, WorkerSettings, 
 class FakeCustomerRepository:
     def __init__(self) -> None:
         self.customer = CustomerIdentity(id=1, name="Maya Chen", email="maya@example.test")
+        self.daily_limit = 50
         self.orders = [
             CustomerOrder(
                 order_number="ORD-1001",
@@ -77,6 +82,13 @@ class FakeCustomerRepository:
                 refund_progress="none",
             )
         ]
+
+    async def daily_run_limit(self, default: int) -> int:
+        return self.daily_limit
+
+    async def set_daily_run_limit(self, limit: int) -> int:
+        self.daily_limit = limit
+        return limit
 
     async def identify_customer(self, name: str, email: str) -> CustomerIdentity | None:
         if (name, email) == (self.customer.name, self.customer.email):
@@ -99,12 +111,25 @@ class FakeRedis:
         self.hashes: dict[str, dict[str, str]] = {}
         self.enqueue_error: Exception | None = None
         self.enqueue_result: object | None = object()
+        self.expires: dict[str, int] = {}
 
     async def get(self, key: str) -> str | None:
         return self.values.get(key)
 
     async def set(self, key: str, value: str) -> None:
         self.values[key] = value
+
+    async def eval(self, script: str, numkeys: int, key: str, limit: int, expires: int) -> int:
+        assert numkeys == 1
+        assert "INCR" in script
+        current = int(self.values.get(key, "0"))
+        if current >= limit:
+            return 0
+        current += 1
+        self.values[key] = str(current)
+        if current == 1:
+            self.expires[key] = expires
+        return current
 
     async def hvals(self, key: str) -> list[str]:
         return list(self.hashes.get(key, {}).values())
@@ -172,6 +197,7 @@ CONTRACT_MODEL_NAMES = {
     RunRequest: "CreateRunRequest",
     RunCreated: "CreateRunResponse",
     DecisionRequest: "DecisionRequest",
+    DailyRunLimit: "DailyRunLimit",
     RunList: "RunListResponse",
     CustomerInput: "CustomerInput",
     Customer: "Customer",
@@ -342,6 +368,56 @@ async def test_customer_lookup_orders_and_scoped_run_access() -> None:
 
     await write_run_status(redis, "run-paused-2", status="completed")
     assert await redis.hvals(awaiting_orders_key(1)) == []
+
+
+@pytest.mark.asyncio
+async def test_daily_run_cap_claims_until_limit_and_expires_at_utc_midnight() -> None:
+    redis = FakeRedis({"run_id": "existing", "thread_id": "thread-existing", "status": "queued"})
+    now = datetime(2025, 1, 2, 23, 59, 45, tzinfo=UTC)
+
+    assert await claim_daily_run(redis, 2, now)
+    assert await claim_daily_run(redis, 2, now)
+    assert not await claim_daily_run(redis, 2, now)
+    assert redis.values["daily:runs:2025-01-02"] == "2"
+    assert redis.expires["daily:runs:2025-01-02"] == 15
+
+
+@pytest.mark.asyncio
+async def test_create_run_returns_429_when_daily_limit_is_reached() -> None:
+    redis = FakeRedis({"run_id": "existing", "thread_id": "thread-existing", "status": "queued"})
+    repository = FakeCustomerRepository()
+    repository.daily_limit = 1
+
+    created = await create_run(RunRequest(message="First request"), redis, repository)
+    with pytest.raises(HTTPException) as error:
+        await create_run(RunRequest(message="Second request"), redis, repository)
+
+    assert created.run_id
+    assert error.value.status_code == 429
+    assert error.value.detail == "Daily demo budget is used up, come back tomorrow."
+
+
+@pytest.mark.asyncio
+async def test_runtime_daily_limit_change_takes_effect_without_restart() -> None:
+    redis = FakeRedis({"run_id": "existing", "thread_id": "thread-existing", "status": "queued"})
+    repository = FakeCustomerRepository()
+
+    assert (await get_daily_run_limit(repository)).daily_run_limit == 50
+    assert (await update_daily_run_limit(DailyRunLimit(daily_run_limit=1), repository)).daily_run_limit == 1
+    await create_run(RunRequest(message="First request"), redis, repository)
+    with pytest.raises(HTTPException) as error:
+        await create_run(RunRequest(message="Second request"), redis, repository)
+
+    assert error.value.status_code == 429
+
+
+@pytest.mark.asyncio
+async def test_daily_run_cap_is_disabled_when_limit_is_zero() -> None:
+    redis = FakeRedis({"run_id": "existing", "thread_id": "thread-existing", "status": "queued"})
+
+    assert await claim_daily_run(redis, 0)
+    assert redis.expires == {}
+    assert all(not key.startswith("daily:runs:") for key in redis.values)
 
 
 @pytest.mark.asyncio

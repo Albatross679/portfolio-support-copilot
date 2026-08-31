@@ -83,6 +83,10 @@ export interface DecisionRequest {
   decision: "approve" | "reject";
 }
 
+export interface DailyRunLimit {
+  daily_run_limit: number;
+}
+
 export interface RunListResponse {
   runs: SupportRun[];
   total: number;

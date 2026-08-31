@@ -4,13 +4,15 @@ The Compose console and API share one origin. In Vite development, leave `VITE_A
 
 ## Runs
 
-`POST /runs` accepts `{ "message": "customer support text", "thread_id": "optional existing thread", "customer": "optional customer identity", "order_number": "optional" }` and returns `{ "run_id": "string", "thread_id": "string" }` immediately. Work continues asynchronously.
+`POST /runs` accepts `{ "message": "customer support text", "thread_id": "optional existing thread", "customer": "optional customer identity", "order_number": "optional" }` and returns `{ "run_id": "string", "thread_id": "string" }` immediately. Work continues asynchronously. When the global daily demo budget is exhausted, it returns `429` with `{ "detail": "Daily demo budget is used up, come back tomorrow." }`.
 
 `GET /runs/{run_id}` returns a run object with `run_id`, `thread_id`, `status`, `created_at`, `message_preview`, `extraction`, `route`, `answer`, `proposed_refund`, and `error` once available. `status` is one of `queued`, `running`, `awaiting_approval`, `completed`, or `failed`.
 
 `GET /runs` accepts optional `status`, `limit`, and `offset` query parameters. It returns `{ "runs": [Run], "total": number, "limit": number, "offset": number }`, sorted newest first. The employee run monitor uses pagination. The approval inbox does not paginate and requests up to 100 runs with `status=awaiting_approval`. The demo store will not have 100 simultaneous paused runs.
 
 `POST /runs/{run_id}/decision` accepts `{ "decision": "approve" }` or `{ "decision": "reject" }`, enqueues a resume job, and returns the current run object with `202`. Poll `GET /runs/{run_id}` until it is completed to read its `answer`.
+
+`GET /settings/daily-run-limit` and `PUT /settings/daily-run-limit` return `{ "daily_run_limit": number }`. The employee console uses these endpoints to set the global UTC-day cap, with `0` disabling the cap.
 
 ## Customer portal
 
