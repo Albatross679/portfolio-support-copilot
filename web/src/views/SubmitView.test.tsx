@@ -48,6 +48,17 @@ it("reuses the selected thread for a follow-up", async () => {
   expect((await client.getRun("run_demo_3000")).thread_id).toBe("thread_existing");
 });
 
+it("shows the daily budget message for a follow-up", async () => {
+  const user = userEvent.setup();
+  const client = { ...createMockApi(), createRun: async () => { throw new Error("Daily demo budget is used up, come back tomorrow."); } };
+  render(<SubmitView client={client} threadId="thread_existing" onClearThread={vi.fn()} onRunCreated={vi.fn()} />);
+
+  await user.type(screen.getByLabelText("Customer message"), "Can you clarify that?");
+  await user.click(screen.getByRole("button", { name: "Start support run" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Daily demo budget is used up, come back tomorrow.");
+});
+
 it("requires a customer message", async () => {
   const user = userEvent.setup();
   render(<SubmitView client={createMockApi()} onClearThread={vi.fn()} onRunCreated={vi.fn()} />);

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
@@ -12,6 +13,7 @@ it("identifies a customer from their name and email", async () => {
   const onIdentified = vi.fn();
   render(<CustomerPortalView client={createMockApi()} onIdentified={onIdentified} onSignedOut={vi.fn()} onRunCreated={vi.fn()} />);
 
+  await user.click(screen.getByText("Check your orders"));
   await user.type(screen.getByLabelText("Name"), "Maya Chen");
   await user.type(screen.getByLabelText("Email"), "maya@example.test");
   await user.click(screen.getByRole("button", { name: "Find my orders" }));
@@ -23,6 +25,7 @@ it("shows a lookup failure for a wrong name and email pair", async () => {
   const user = userEvent.setup();
   render(<CustomerPortalView client={createMockApi()} onIdentified={vi.fn()} onSignedOut={vi.fn()} onRunCreated={vi.fn()} />);
 
+  await user.click(screen.getByText("Check your orders"));
   await user.type(screen.getByLabelText("Name"), "Maya Chen");
   await user.type(screen.getByLabelText("Email"), "wrong@example.test");
   await user.click(screen.getByRole("button", { name: "Find my orders" }));
@@ -41,6 +44,29 @@ it("shows the daily budget message when a customer request is refused", async ()
   expect(await screen.findByRole("alert")).toHaveTextContent("Daily demo budget is used up, come back tomorrow.");
 });
 
+it("lets an anonymous visitor submit a general support message", async () => {
+  const user = userEvent.setup();
+  const onRunCreated = vi.fn();
+  render(<CustomerPortalView client={createMockApi()} onIdentified={vi.fn()} onSignedOut={vi.fn()} onRunCreated={onRunCreated} />);
+
+  expect(screen.getByText(/Ask about returns, region codes, shipping, preorders, damaged discs, order status, or refund status/)).toBeInTheDocument();
+  await user.type(screen.getByLabelText("Message"), "What is your return policy?");
+  await user.click(screen.getByRole("button", { name: "Start support request" }));
+
+  expect(onRunCreated).toHaveBeenCalledWith("run_demo_3000");
+});
+
+it("shows the daily budget message for a customer request", async () => {
+  const user = userEvent.setup();
+  const client = { ...createMockApi(), createRun: async () => { throw new Error("Daily demo budget is used up, come back tomorrow."); } };
+  render(<CustomerPortalView client={client} onIdentified={vi.fn()} onSignedOut={vi.fn()} onRunCreated={vi.fn()} />);
+
+  await user.type(screen.getByLabelText("Message"), "Where is my order?");
+  await user.click(screen.getByRole("button", { name: "Start support request" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Daily demo budget is used up, come back tomorrow.");
+});
+
 it("lists orders and sends the selected order with a support message", async () => {
   const user = userEvent.setup();
   const client = createMockApi();
@@ -54,4 +80,24 @@ it("lists orders and sends the selected order with a support message", async () 
 
   expect(onRunCreated).toHaveBeenCalledWith("run_demo_3000");
   expect((await client.getCustomerRun(maya, "run_demo_3000")).extraction?.order_number).toBe("ORD-1004");
+});
+
+it("clears the selected order when customer identification is cleared", async () => {
+  const user = userEvent.setup();
+  const client = createMockApi();
+  const createRun = vi.spyOn(client, "createRun");
+
+  function Portal() {
+    const [customer, setCustomer] = useState<CustomerIdentity | undefined>(maya);
+    return <CustomerPortalView client={client} customer={customer} onIdentified={setCustomer} onSignedOut={() => setCustomer(undefined)} onRunCreated={vi.fn()} />;
+  }
+
+  render(<Portal />);
+  await screen.findByText("ORD-1004");
+  await user.selectOptions(screen.getByLabelText("What is this about?"), "ORD-1004");
+  await user.click(screen.getByRole("button", { name: "Use a different customer" }));
+  await user.type(screen.getByLabelText("Message"), "What is your return policy?");
+  await user.click(screen.getByRole("button", { name: "Start support request" }));
+
+  expect(createRun).toHaveBeenCalledWith({ message: "What is your return policy?", customer: undefined });
 });
