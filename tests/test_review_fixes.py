@@ -71,9 +71,7 @@ from support_copilot.worker import THREAD_LOCK_TIMEOUT_SECONDS, WorkerSettings, 
 class FakeCustomerRepository:
     def __init__(self) -> None:
         self.customer = CustomerIdentity(id=1, name="Maya Chen", email="maya@example.test")
-        self.other_customer = CustomerIdentity(
-            id=2, name="Avery Stone", email="avery@example.test"
-        )
+        self.other_customer = CustomerIdentity(id=2, name="Avery Stone", email="avery@example.test")
         self.daily_limit = 50
         self.thread_owners: dict[str, str] = {}
         self.orders = [
@@ -436,7 +434,9 @@ async def test_follow_up_rejects_a_different_customer_identity() -> None:
     assert repository.thread_owners[first.thread_id] == "customer:1"
     assert all(not key.startswith("daily:runs:") for key in redis.values)
     assert error.value.status_code == 403
-    assert error.value.detail == "This support thread cannot be continued with this customer identity."
+    assert (
+        error.value.detail == "This support thread cannot be continued with this customer identity."
+    )
 
 
 @pytest.mark.asyncio
@@ -477,7 +477,9 @@ async def test_follow_up_rejects_a_thread_without_a_durable_owner() -> None:
         )
 
     assert error.value.status_code == 403
-    assert error.value.detail == "This support thread has no recorded owner. Start a new conversation."
+    assert (
+        error.value.detail == "This support thread has no recorded owner. Start a new conversation."
+    )
     assert all(not key.startswith("daily:runs:") for key in redis.values)
 
 
@@ -487,7 +489,9 @@ async def test_runtime_daily_limit_change_takes_effect_without_restart() -> None
     repository = FakeCustomerRepository()
 
     assert (await get_daily_run_limit(repository)).daily_run_limit == 50
-    assert (await update_daily_run_limit(DailyRunLimit(daily_run_limit=1), repository)).daily_run_limit == 1
+    assert (
+        await update_daily_run_limit(DailyRunLimit(daily_run_limit=1), repository)
+    ).daily_run_limit == 1
     await create_run(RunRequest(message="First request"), redis, repository)
     with pytest.raises(HTTPException) as error:
         await create_run(RunRequest(message="Second request"), redis, repository)

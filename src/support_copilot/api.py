@@ -235,7 +235,9 @@ async def get_daily_run_limit(
 async def update_daily_run_limit(
     payload: DailyRunLimit, repository: StoreRepository = Depends(store_repository)
 ) -> DailyRunLimit:
-    return DailyRunLimit(daily_run_limit=await repository.set_daily_run_limit(payload.daily_run_limit))
+    return DailyRunLimit(
+        daily_run_limit=await repository.set_daily_run_limit(payload.daily_run_limit)
+    )
 
 
 @app.post("/runs", response_model=RunCreated, status_code=status.HTTP_202_ACCEPTED)
