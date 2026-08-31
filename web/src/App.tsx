@@ -7,6 +7,7 @@ import { CustomerPortalView } from "./views/CustomerPortalView";
 import { DailyRunLimitView } from "./views/DailyRunLimitView";
 import { RunMonitorView } from "./views/RunMonitorView";
 import { RunView } from "./views/RunView";
+import { SubmitView } from "./views/SubmitView";
 
 const CUSTOMER_STORAGE_KEY = "support-copilot.customer";
 
@@ -50,15 +51,24 @@ export default function App() {
 
   const employeeRunId = path.match(/^\/employees\/runs\/([^/]+)$/)?.[1];
   const customerRunId = path.match(/^\/customer\/runs\/([^/]+)$/)?.[1];
+  const customerFollowUpThreadId = path.match(/^\/customer\/threads\/([^/]+)\/follow-up$/)?.[1];
   const employeePath = path.startsWith("/employees") || path === "/approvals";
   const customerClient = customer
-    ? { ...api, getRun: (id: string) => api.getCustomerRun(customer, id) }
+    ? {
+        ...api,
+        createRun: (request: Parameters<typeof api.createRun>[0]) => api.createRun({ ...request, customer }),
+        getRun: (id: string) => api.getCustomerRun(customer, id),
+      }
     : api;
   const view = employeeRunId
     ? <RunView runId={decodeURIComponent(employeeRunId)} />
+    : customerFollowUpThreadId
+      ? customer
+        ? <SubmitView client={customerClient} threadId={decodeURIComponent(customerFollowUpThreadId)} onClearThread={() => navigate("/")} onRunCreated={(id) => navigate(`/customer/runs/${encodeURIComponent(id)}`)} />
+        : <CustomerPortalView customer={customer} onIdentified={identify} onSignedOut={signOut} onRunCreated={(id) => navigate(`/customer/runs/${encodeURIComponent(id)}`)} />
     : customerRunId
       ? customer
-        ? <RunView client={customerClient} runId={decodeURIComponent(customerRunId)} />
+        ? <RunView client={customerClient} onFollowUp={(threadId) => navigate(`/customer/threads/${encodeURIComponent(threadId)}/follow-up`)} runId={decodeURIComponent(customerRunId)} />
         : <CustomerPortalView customer={customer} onIdentified={identify} onSignedOut={signOut} onRunCreated={(id) => navigate(`/customer/runs/${encodeURIComponent(id)}`)} />
       : path === "/employees/approvals" || path === "/approvals"
         ? <ApprovalInboxView onOpenRun={(id) => navigate(`/employees/runs/${encodeURIComponent(id)}`)} />

@@ -41,7 +41,7 @@ The `init` Compose service applies the schema, seeds fake business data only whe
 
 `EMBEDDING_DIM` defaults to 1536, which matches `openai/text-embedding-3-small`. When changing the embedding model or its output size, set both `OPENROUTER_EMBEDDING_MODEL` and `EMBEDDING_DIM`; the changed fingerprint automatically re-ingests every help document. Every init run with `RESET_DEMO_DATA=1` truncates and reseeds the business tables. This does not reset help-document embeddings.
 
-`DAILY_RUN_LIMIT` defaults to 50 and seeds the global UTC-day run cap only when no employee setting exists yet. The employee console can change the active limit at runtime, and `0` disables it for local development and tests. Redis increments the global counter when a run is queued and expires its UTC-day key at midnight. This deliberate demo-cost safeguard does not replace the future API-key authentication and per-key rate limiting work.
+`DAILY_RUN_LIMIT` defaults to 50 and seeds the global UTC-day run cap only when no employee setting exists yet. The employee console can change the active limit at runtime, and `0` disables it for local development and tests. Redis increments the global counter when a run is queued and expires its UTC-day key at midnight. This global cap is the deliberate exception while per-user tracking, API-key authentication, token accounting, and general rate limiting remain future work.
 
 ## Development and tests
 
