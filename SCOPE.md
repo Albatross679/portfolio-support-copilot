@@ -49,8 +49,9 @@ One stateful LangGraph graph. A message enters and flows through nodes:
 
 The graph does not run inside the web request. The flow is:
 
-1. `POST /runs` accepts the message, puts a job on a Redis queue via arq, and returns
-   a `run_id` immediately.
+1. `POST /runs` accepts the message, claims one run against the global UTC-day limit,
+   puts a job on a Redis queue via arq, and returns a `run_id` immediately. The active
+   limit is stored in Postgres and can be changed from the employee console.
 2. A separate worker process pulls the job off the queue and runs the graph.
 3. `GET /runs/{run_id}` returns the current status. When the graph is paused it returns
    `awaiting_approval` along with the proposed refund.
@@ -61,11 +62,13 @@ The graph does not run inside the web request. The flow is:
 One Postgres instance holds three groups of tables:
 
 - LangGraph checkpoint tables (the saved graph state).
-- Business tables: orders, customers, products, all seeded with fake data.
+- Application tables: orders, customers, products, runtime settings, and thread owners.
+  The fake business records are seeded.
 - A pgvector table holding embeddings of the help documents for RAG.
 
 Redis holds the arq job queue, each job's status and result, and a cache of tool
-results (for example a repeated SQL lookup).
+results (for example a repeated SQL lookup). It also holds the global daily run counter,
+which expires at the next UTC day.
 
 Two data services total: Postgres and Redis.
 
@@ -81,19 +84,24 @@ Two data services total: Postgres and Redis.
 A React and TypeScript console split into customer and employee areas:
 
 - The customer area identifies a demo customer by name and email, lists their orders,
-  submits a support message, and shows the resulting answer. The lookup is not authentication.
+  submits support messages and follow-ups, and shows the resulting answers. The lookup
+  is not authentication.
 - The employee area at `/employees` lists recent runs newest first and opens the same
   run detail view.
 - The employee approval inbox lists paused runs with approve and reject buttons that
   call the decision endpoint.
 - Employee tables create, read, update, and delete demo customers, products, and orders.
+- Employee settings read and update the global daily run limit without restarting the app.
 
 It is a thin client over a strong backend, honest about that. No design-system polish.
 
 ## In scope (committed)
 
 - The full backend: FastAPI service, arq worker, the LangGraph graph with all five nodes,
-  Postgres (checkpointer plus business tables plus pgvector), Redis (queue plus cache).
+  Postgres (checkpointer plus application tables plus pgvector), Redis (queue, run counter,
+  and cache).
+- A global UTC-day run limit that defaults to 50, can be changed by an employee, and can
+  be disabled with a value of zero.
 - Connection pooling for Postgres, one shared model and Redis client built once at startup.
 - Async throughout, with any blocking or CPU-bound work pushed off the event loop.
 - The React console described above.
@@ -110,7 +118,8 @@ It is a thin client over a strong backend, honest about that. No design-system p
 
 - Authentication and authorization for the employee area.
 - A concurrent-edit transaction policy for employee business data.
-- API-key authentication and per-key rate limiting.
+- API-key authentication and per-key rate limiting. The global daily run limit is the
+  deliberate exception.
 - Structured logging with request tracing and a metrics endpoint.
 - Live streaming (server-sent events) of the agent's progress. Polling covers the demo.
 - Any real payment integration. Refunds are simulated against the fake business data.

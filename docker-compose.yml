@@ -32,6 +32,7 @@ services:
       OPENROUTER_EMBEDDING_MODEL: ${OPENROUTER_EMBEDDING_MODEL:-openai/text-embedding-3-small}
       EMBEDDING_DIM: ${EMBEDDING_DIM:-1536}
       RESET_DEMO_DATA: ${RESET_DEMO_DATA:-0}
+      DAILY_RUN_LIMIT: ${DAILY_RUN_LIMIT:-50}
       OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
     depends_on:
       postgres:

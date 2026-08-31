@@ -92,6 +92,10 @@ class DecisionRequest(BaseModel):
     decision: Literal["approve", "reject"]
 
 
+class DailyRunLimit(BaseModel):
+    daily_run_limit: int = Field(ge=0)
+
+
 type RunState = Literal["queued", "running", "awaiting_approval", "completed", "failed"]
 
 

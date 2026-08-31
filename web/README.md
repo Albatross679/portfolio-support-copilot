@@ -1,6 +1,6 @@
 # Support Copilot console
 
-A React and TypeScript console for the portfolio-support-copilot backend. The customer portal identifies a demo customer, lists their orders, and submits support requests for a selected order. The employee area at `/employees` monitors recent runs, handles refund approvals, and edits demo customers, products, and orders.
+A React and TypeScript console for the portfolio-support-copilot backend. The customer portal identifies a demo customer, lists their orders, submits support requests, and sends follow-ups. The employee area at `/employees` monitors recent runs, handles refund approvals, edits demo business data, and sets the daily run limit.
 
 ## Run locally
 
@@ -14,11 +14,11 @@ npm install
 npm run dev
 ```
 
-Leave `VITE_API_BASE` blank to send `/api` requests through the Vite proxy to `http://localhost:8000`. You can instead set `VITE_API_BASE=http://localhost:8000 npm run dev`; FastAPI permits local Vite origins. Use port 8001 for the documented Compose fallback.
+Leave `VITE_API_BASE` blank to send `/api` requests through the Vite proxy to `http://localhost:8000`. You can instead set `VITE_API_BASE=http://localhost:8000 npm run dev`. FastAPI permits local Vite origins. Use port 8001 for the documented Compose fallback.
 
 ## Mock mode
 
-Run `VITE_MOCK_API=1 npm run dev` to use canned browser-side data without a backend. Submit a message containing `refund` to create a paused run, then review it in the employee approval inbox. The mock also supplies recent runs and editable business data. It uses the same current contract as the backend.
+Run `VITE_MOCK_API=1 npm run dev` to use canned browser-side data without a backend. Submit a message containing `refund` to create a paused run, then review it in the employee approval inbox. The mock also supplies recent runs, editable business data, and the daily run limit setting. It uses the same current contract as the backend.
 
 ## Build and test
 

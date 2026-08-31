@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     embedding_dim: int = Field(default=1536, ge=1, le=16000)
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     reset_demo_data: bool = False
+    daily_run_limit: int = Field(default=50, ge=0)
 
 
 @lru_cache

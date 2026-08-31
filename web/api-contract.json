@@ -249,6 +249,14 @@
         "decision"
       ]
     },
+    "DailyRunLimit": {
+      "properties": {
+        "daily_run_limit": "integer"
+      },
+      "required": [
+        "daily_run_limit"
+      ]
+    },
     "RunListResponse": {
       "properties": {
         "runs": {

@@ -15,6 +15,28 @@ it("submits a message through the mock API and opens its run", async () => {
   expect(onRunCreated).toHaveBeenCalledWith("run_demo_3000");
 });
 
+it("shows the daily budget message for a follow-up submission", async () => {
+  const user = userEvent.setup();
+  const client = { ...createMockApi(), createRun: async () => { throw new Error("Daily demo budget is used up, come back tomorrow."); } };
+  render(<SubmitView client={client} threadId="thread_existing" onClearThread={vi.fn()} onRunCreated={vi.fn()} />);
+
+  await user.type(screen.getByLabelText("Customer message"), "Can you clarify that?");
+  await user.click(screen.getByRole("button", { name: "Start support run" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Daily demo budget is used up, come back tomorrow.");
+});
+
+it("shows an ownerless thread error for a follow-up submission", async () => {
+  const user = userEvent.setup();
+  const client = { ...createMockApi(), createRun: async () => { throw new Error("This support thread has no recorded owner. Start a new conversation."); } };
+  render(<SubmitView client={client} threadId="thread_without_owner" onClearThread={vi.fn()} onRunCreated={vi.fn()} />);
+
+  await user.type(screen.getByLabelText("Customer message"), "Can you clarify that?");
+  await user.click(screen.getByRole("button", { name: "Start support run" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("This support thread has no recorded owner. Start a new conversation.");
+});
+
 it("reuses the selected thread for a follow-up", async () => {
   const user = userEvent.setup();
   const client = createMockApi();

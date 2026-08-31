@@ -21,26 +21,29 @@ import type {
 
 const API_BASE = (import.meta.env.VITE_API_BASE ?? (import.meta.env.DEV ? "/api" : "")).replace(/\/$/, "");
 
+async function errorMessage(response: Response): Promise<string> {
+  const body = await response.text();
+  try {
+    const parsed = JSON.parse(body) as { detail?: unknown };
+    if (typeof parsed.detail === "string") return parsed.detail;
+  } catch {
+    // Preserve non-JSON API error bodies.
+  }
+  return body || `Request failed with ${response.status}`;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: { "Content-Type": "application/json", ...init?.headers },
   });
-
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(detail || `Request failed with ${response.status}`);
-  }
-
+  if (!response.ok) throw new Error(await errorMessage(response));
   return response.json() as Promise<T>;
 }
 
 async function requestVoid(path: string, init?: RequestInit): Promise<void> {
   const response = await fetch(`${API_BASE}${path}`, init);
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(detail || `Request failed with ${response.status}`);
-  }
+  if (!response.ok) throw new Error(await errorMessage(response));
 }
 
 export const httpApi: SupportApi = {
@@ -51,6 +54,8 @@ export const httpApi: SupportApi = {
   identifyCustomer: (body: CustomerIdentificationRequest) => request<CustomerIdentificationResponse>("/customers/identify", { method: "POST", body: JSON.stringify(body) }),
   listCustomerOrders: (customer: CustomerIdentity) => request<CustomerOrderList>(`/customers/${customer.id}/orders?name=${encodeURIComponent(customer.name)}&email=${encodeURIComponent(customer.email)}`),
   getCustomerRun: (customer: CustomerIdentity, runId: string) => request<SupportRun>(`/customers/${customer.id}/runs/${encodeURIComponent(runId)}?name=${encodeURIComponent(customer.name)}&email=${encodeURIComponent(customer.email)}`),
+  getDailyRunLimit: () => request("/settings/daily-run-limit"),
+  setDailyRunLimit: (daily_run_limit) => request("/settings/daily-run-limit", { method: "PUT", body: JSON.stringify({ daily_run_limit }) }),
   listCustomers: () => request("/customers"),
   createCustomer: (body) => request("/customers", { method: "POST", body: JSON.stringify(body) }),
   updateCustomer: (id, body) => request(`/customers/${id}`, { method: "PUT", body: JSON.stringify(body) }),
@@ -112,6 +117,7 @@ export function createMockApi(): SupportApi {
   let products: Product[] = [{ id: 1, title: "The Last Horizon", format: "4K UHD", sku: "TLH-4K", price_cents: 2999 }];
   let orders: Order[] = [{ id: 1, order_number: "ORD-1001", customer_id: 1, product_id: 1, quantity: 1, ordered_at: "2025-01-01T12:00:00Z", status: "delivered", refund_status: "none" }];
   let sequence = 3000;
+  let dailyRunLimit = 50;
 
   return {
     async createRun({ message, thread_id, customer, order_number }) {
@@ -162,6 +168,8 @@ export function createMockApi(): SupportApi {
       if (!run) throw new Error("Run not found");
       return clone(run);
     },
+    async getDailyRunLimit() { return { daily_run_limit: dailyRunLimit }; },
+    async setDailyRunLimit(daily_run_limit) { dailyRunLimit = daily_run_limit; return { daily_run_limit: dailyRunLimit }; },
     async listCustomers() { return { customers: clone(customers) }; },
     async createCustomer(input: CustomerInput) { const customer = { id: ++sequence, ...input }; customers.push(customer); return clone(customer); },
     async updateCustomer(id, input) { const index = customers.findIndex((item) => item.id === id); if (index < 0) throw new Error("Customer not found"); customers[index] = { id, ...input }; return clone(customers[index]); },

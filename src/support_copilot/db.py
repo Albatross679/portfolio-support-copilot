@@ -34,6 +34,60 @@ class StoreRepository:
     def __init__(self, pool: AsyncConnectionPool) -> None:
         self.pool = pool
 
+    async def daily_run_limit(self, default: int) -> int:
+        async with self.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cur:
+                await cur.execute(
+                    """
+                    INSERT INTO runtime_settings (key, value) VALUES ('daily_run_limit', %s)
+                    ON CONFLICT (key) DO NOTHING
+                    RETURNING value
+                    """,
+                    (default,),
+                )
+                row = await cur.fetchone()
+                if row is None:
+                    await cur.execute(
+                        "SELECT value FROM runtime_settings WHERE key = 'daily_run_limit'"
+                    )
+                    row = await cur.fetchone()
+            await conn.commit()
+        assert row is not None
+        return int(row["value"])
+
+    async def set_daily_run_limit(self, limit: int) -> int:
+        async with self.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cur:
+                await cur.execute(
+                    """
+                    INSERT INTO runtime_settings (key, value) VALUES ('daily_run_limit', %s)
+                    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+                    RETURNING value
+                    """,
+                    (limit,),
+                )
+                row = await cur.fetchone()
+            await conn.commit()
+        assert row is not None
+        return int(row["value"])
+
+    async def thread_owner(self, thread_id: str) -> str | None:
+        async with self.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cur:
+                await cur.execute(
+                    "SELECT owner FROM thread_owners WHERE thread_id = %s", (thread_id,)
+                )
+                row = await cur.fetchone()
+        return str(row["owner"]) if row else None
+
+    async def create_thread_owner(self, thread_id: str, owner: str) -> None:
+        async with self.pool.connection() as conn:
+            await conn.execute(
+                "INSERT INTO thread_owners (thread_id, owner) VALUES (%s, %s)",
+                (thread_id, owner),
+            )
+            await conn.commit()
+
     async def identify_customer(self, name: str, email: str) -> CustomerIdentity | None:
         async with self.pool.connection() as conn:
             async with conn.cursor(row_factory=dict_row) as cur:

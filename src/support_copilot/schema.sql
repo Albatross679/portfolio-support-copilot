@@ -33,6 +33,16 @@ CREATE TABLE IF NOT EXISTS orders (
   refund_status TEXT NOT NULL DEFAULT 'none' CHECK (refund_status IN ('none', 'approved', 'rejected'))
 );
 
+CREATE TABLE IF NOT EXISTS runtime_settings (
+  key TEXT PRIMARY KEY,
+  value INTEGER NOT NULL CHECK (value >= 0)
+);
+
+CREATE TABLE IF NOT EXISTS thread_owners (
+  thread_id TEXT PRIMARY KEY,
+  owner TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS help_document_embeddings (
   id BIGSERIAL PRIMARY KEY,
   document_name TEXT NOT NULL,

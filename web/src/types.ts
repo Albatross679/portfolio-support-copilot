@@ -10,6 +10,7 @@ import type {
   CustomerListResponse,
   CustomerOrder,
   CustomerOrderList,
+  DailyRunLimit,
   DecisionRequest,
   Order,
   OrderInput,
@@ -37,6 +38,7 @@ export type {
   CustomerListResponse,
   CustomerOrder,
   CustomerOrderList,
+  DailyRunLimit,
   DecisionRequest,
   Order,
   OrderInput,
@@ -62,6 +64,8 @@ export interface SupportApi {
   identifyCustomer(request: CustomerIdentificationRequest): Promise<CustomerIdentificationResponse>;
   listCustomerOrders(customer: CustomerIdentity): Promise<CustomerOrderList>;
   getCustomerRun(customer: CustomerIdentity, runId: string): Promise<SupportRun>;
+  getDailyRunLimit(): Promise<DailyRunLimit>;
+  setDailyRunLimit(dailyRunLimit: number): Promise<DailyRunLimit>;
   listCustomers(): Promise<CustomerListResponse>;
   createCustomer(request: CustomerInput): Promise<Customer>;
   updateCustomer(id: number, request: CustomerInput): Promise<Customer>;
