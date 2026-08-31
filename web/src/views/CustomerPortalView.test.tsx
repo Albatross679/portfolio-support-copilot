@@ -56,6 +56,17 @@ it("lets an anonymous visitor submit a general support message", async () => {
   expect(onRunCreated).toHaveBeenCalledWith("run_demo_3000");
 });
 
+it("shows the daily budget message for a customer request", async () => {
+  const user = userEvent.setup();
+  const client = { ...createMockApi(), createRun: async () => { throw new Error("Daily demo budget is used up, come back tomorrow."); } };
+  render(<CustomerPortalView client={client} onIdentified={vi.fn()} onSignedOut={vi.fn()} onRunCreated={vi.fn()} />);
+
+  await user.type(screen.getByLabelText("Message"), "Where is my order?");
+  await user.click(screen.getByRole("button", { name: "Start support request" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Daily demo budget is used up, come back tomorrow.");
+});
+
 it("lists orders and sends the selected order with a support message", async () => {
   const user = userEvent.setup();
   const client = createMockApi();
