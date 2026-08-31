@@ -267,7 +267,7 @@ def main() -> None:
         ),
     ]
     R.build(
-        "How does Portfolio Support Copilot keep support work asynchronous and reviewable?",
+        "LangGraph mock online movie-media store customer support agent",
         f"Qifan Wen · qifanwen679@gmail.com · {date.today().isoformat()}",
         parts,
         ROOT / "reports/project-report.html",
