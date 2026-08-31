@@ -20,6 +20,8 @@ The Compose console and API share one origin. In Vite development, leave `VITE_A
 
 `GET /customers/{customer_id}/runs/{run_id}` requires the same query parameters. It returns the run only when it was created for that customer.
 
+Passing a `thread_id` to `POST /runs` creates a follow-up. The API accepts it only when the stored thread owner matches the supplied customer. A thread without a stored owner returns `403` and must be replaced with a new conversation. These checks only separate callers who provide different customer records. A caller who knows another customer's name and email can identify as that customer. Authentication remains future work.
+
 ## Employee business data
 
 The employee console uses `GET` and `POST` on `/customers`, `/products`, and `/orders`, plus `PUT` and `DELETE` on each resource's `/{id}` path. Customer input is `{ "email", "name" }`. Product input is `{ "title", "format", "sku", "price_cents" }`, where format is `Blu-ray`, `DVD`, `4K UHD`, or `box set`. Order input is `{ "order_number", "customer_id", "product_id", "quantity", "ordered_at", "status", "refund_status" }`; `refund_status` defaults to `none`. A duplicate unique value or an invalid reference returns `409`. Deleting a customer or product with orders returns `409` with a dependency message.
