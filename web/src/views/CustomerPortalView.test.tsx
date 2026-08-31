@@ -12,6 +12,7 @@ it("identifies a customer from their name and email", async () => {
   const onIdentified = vi.fn();
   render(<CustomerPortalView client={createMockApi()} onIdentified={onIdentified} onSignedOut={vi.fn()} onRunCreated={vi.fn()} />);
 
+  await user.click(screen.getByText("Check your orders"));
   await user.type(screen.getByLabelText("Name"), "Maya Chen");
   await user.type(screen.getByLabelText("Email"), "maya@example.test");
   await user.click(screen.getByRole("button", { name: "Find my orders" }));
@@ -23,6 +24,7 @@ it("shows a lookup failure for a wrong name and email pair", async () => {
   const user = userEvent.setup();
   render(<CustomerPortalView client={createMockApi()} onIdentified={vi.fn()} onSignedOut={vi.fn()} onRunCreated={vi.fn()} />);
 
+  await user.click(screen.getByText("Check your orders"));
   await user.type(screen.getByLabelText("Name"), "Maya Chen");
   await user.type(screen.getByLabelText("Email"), "wrong@example.test");
   await user.click(screen.getByRole("button", { name: "Find my orders" }));
@@ -39,6 +41,18 @@ it("shows the daily budget message when a customer request is refused", async ()
   await user.click(screen.getByRole("button", { name: "Start support request" }));
 
   expect(await screen.findByRole("alert")).toHaveTextContent("Daily demo budget is used up, come back tomorrow.");
+});
+
+it("lets an anonymous visitor submit a general support message", async () => {
+  const user = userEvent.setup();
+  const onRunCreated = vi.fn();
+  render(<CustomerPortalView client={createMockApi()} onIdentified={vi.fn()} onSignedOut={vi.fn()} onRunCreated={onRunCreated} />);
+
+  expect(screen.getByText(/Ask about returns, region codes, shipping, preorders, damaged discs, order status, or refund status/)).toBeInTheDocument();
+  await user.type(screen.getByLabelText("Message"), "What is your return policy?");
+  await user.click(screen.getByRole("button", { name: "Start support request" }));
+
+  expect(onRunCreated).toHaveBeenCalledWith("run_demo_3000");
 });
 
 it("lists orders and sends the selected order with a support message", async () => {

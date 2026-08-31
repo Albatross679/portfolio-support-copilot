@@ -68,6 +68,10 @@ dd { color: #1e2930; margin: 0; }
 .follow-up-note { font-size: 0.9rem; }
 
 .orders-section, .support-request { margin-top: 34px; }
+.order-lookup { color: #173d42; margin-top: 20px; }
+.order-lookup summary { cursor: pointer; font-size: 1rem; font-weight: 700; }
+.order-lookup .identity-form { margin-top: 14px; }
+.support-hint { background: #edf2ef; border-left: 3px solid #286a6c; font-size: 0.9rem; margin-bottom: 14px; padding: 10px 12px; }
 .order-list { display: grid; gap: 12px; }
 .order-card { background: #fff; border: 1px solid #dce0da; border-radius: 10px; display: grid; gap: 18px; grid-template-columns: minmax(180px, 0.9fr) minmax(0, 1.6fr); padding: 20px; }
 .order-card > div { display: grid; gap: 6px; }

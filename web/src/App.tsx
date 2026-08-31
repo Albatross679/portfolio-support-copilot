@@ -67,9 +67,7 @@ export default function App() {
         ? <SubmitView client={customerClient} threadId={decodeURIComponent(customerFollowUpThreadId)} onClearThread={() => navigate("/")} onRunCreated={(id) => navigate(`/customer/runs/${encodeURIComponent(id)}`)} />
         : <CustomerPortalView customer={customer} onIdentified={identify} onSignedOut={signOut} onRunCreated={(id) => navigate(`/customer/runs/${encodeURIComponent(id)}`)} />
     : customerRunId
-      ? customer
-        ? <RunView client={customerClient} onFollowUp={(threadId) => navigate(`/customer/threads/${encodeURIComponent(threadId)}/follow-up`)} runId={decodeURIComponent(customerRunId)} />
-        : <CustomerPortalView customer={customer} onIdentified={identify} onSignedOut={signOut} onRunCreated={(id) => navigate(`/customer/runs/${encodeURIComponent(id)}`)} />
+      ? <RunView client={customerClient} onFollowUp={customer ? (threadId) => navigate(`/customer/threads/${encodeURIComponent(threadId)}/follow-up`) : undefined} runId={decodeURIComponent(customerRunId)} />
       : path === "/employees/approvals" || path === "/approvals"
         ? <ApprovalInboxView onOpenRun={(id) => navigate(`/employees/runs/${encodeURIComponent(id)}`)} />
         : path === "/employees/data"
