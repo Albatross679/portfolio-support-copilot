@@ -259,10 +259,10 @@ def main() -> None:
         R.section("References"),
         R.references(
             [
-                "Q. Wen, <i>Portfolio Support Copilot source artifacts: graph.py, worker.py, schema.sql, web/api-contract.json, and tests/evals/support_cases.jsonl</i>, private source tree, Aug. 2026.",
                 "LangChain, <i>LangGraph Documentation</i>, 2026.",
                 "pgvector contributors, <i>pgvector Documentation</i>, 2026.",
                 "Pydantic, <i>Pydantic Documentation</i>, 2025.",
+                'Q. Wen, <i>portfolio-support-copilot</i>, GitHub repository, 2026. <a class="cite" href="https://github.com/Albatross679/portfolio-support-copilot" target="_blank" rel="noopener noreferrer">github.com/Albatross679/portfolio-support-copilot</a>',
             ]
         ),
     ]
