@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from support_copilot.api import (
     ANONYMOUS_THREAD_OWNER,
-    claim_thread_and_daily_run,
+    claim_daily_run,
     create_customer,
     create_order,
     create_product,
@@ -76,6 +76,7 @@ class FakeCustomerRepository:
             id=2, name="Avery Stone", email="avery@example.test"
         )
         self.daily_limit = 50
+        self.thread_owners: dict[str, str] = {}
         self.orders = [
             CustomerOrder(
                 order_number="ORD-1001",
@@ -94,6 +95,14 @@ class FakeCustomerRepository:
     async def set_daily_run_limit(self, limit: int) -> int:
         self.daily_limit = limit
         return limit
+
+    async def thread_owner(self, thread_id: str) -> str | None:
+        return self.thread_owners.get(thread_id)
+
+    async def create_thread_owner(self, thread_id: str, owner: str) -> None:
+        if thread_id in self.thread_owners:
+            raise ValueError("Thread owner already exists")
+        self.thread_owners[thread_id] = owner
 
     async def identify_customer(self, name: str, email: str) -> CustomerIdentity | None:
         for customer in (self.customer, self.other_customer):
@@ -127,22 +136,6 @@ class FakeRedis:
 
     async def eval(self, script: str, numkeys: int, *args: Any) -> int:
         assert "INCR" in script
-        if numkeys == 2:
-            owner_key, key, requested_owner, limit, expires = args
-            owner = self.values.get(owner_key)
-            if owner is not None and owner != requested_owner:
-                return -1
-            current = int(self.values.get(key, "0"))
-            if limit != 0 and current >= limit:
-                return 0
-            self.values.setdefault(owner_key, requested_owner)
-            if limit == 0:
-                return 1
-            current += 1
-            self.values[key] = str(current)
-            if current == 1:
-                self.expires[key] = expires
-            return 1
         assert numkeys == 1
         key, limit, expires = args
         current = int(self.values.get(key, "0"))
@@ -399,9 +392,9 @@ async def test_daily_run_cap_claims_until_limit_and_expires_at_utc_midnight() ->
     redis = FakeRedis({"run_id": "existing", "thread_id": "thread-existing", "status": "queued"})
     now = datetime(2025, 1, 2, 23, 59, 45, tzinfo=UTC)
 
-    assert await claim_thread_and_daily_run(redis, "thread-1", None, 2, now) == 1
-    assert await claim_thread_and_daily_run(redis, "thread-1", None, 2, now) == 1
-    assert await claim_thread_and_daily_run(redis, "thread-1", None, 2, now) == 0
+    assert await claim_daily_run(redis, 2, now)
+    assert await claim_daily_run(redis, 2, now)
+    assert not await claim_daily_run(redis, 2, now)
     assert redis.values["daily:runs:2025-01-02"] == "2"
     assert redis.expires["daily:runs:2025-01-02"] == 15
 
@@ -428,6 +421,7 @@ async def test_follow_up_rejects_a_different_customer_identity() -> None:
     first = await create_run(
         RunRequest(message="First request", customer=repository.customer), redis, repository
     )
+    redis = FakeRedis({"run_id": "after-restart", "thread_id": "unused", "status": "queued"})
 
     with pytest.raises(HTTPException) as error:
         await create_run(
@@ -438,12 +432,10 @@ async def test_follow_up_rejects_a_different_customer_identity() -> None:
             ),
             redis,
             repository,
-    )
+        )
 
-    assert redis.values[f"thread-owner:{first.thread_id}"] == "customer:1"
-    assert [
-        value for key, value in redis.values.items() if key.startswith("daily:runs:")
-    ] == ["1"]
+    assert repository.thread_owners[first.thread_id] == "customer:1"
+    assert all(not key.startswith("daily:runs:") for key in redis.values)
     assert error.value.status_code == 403
     assert error.value.detail == "This support thread cannot be continued with this customer identity."
 
@@ -465,8 +457,29 @@ async def test_anonymous_thread_cannot_be_claimed_by_a_customer() -> None:
             repository,
         )
 
-    assert redis.values[f"thread-owner:{first.thread_id}"] == ANONYMOUS_THREAD_OWNER
+    assert repository.thread_owners[first.thread_id] == ANONYMOUS_THREAD_OWNER
     assert error.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_follow_up_rejects_a_thread_without_a_durable_owner() -> None:
+    redis = FakeRedis({"run_id": "existing", "thread_id": "legacy-thread", "status": "queued"})
+    repository = FakeCustomerRepository()
+
+    with pytest.raises(HTTPException) as error:
+        await create_run(
+            RunRequest(
+                message="Legacy follow-up",
+                thread_id="legacy-thread",
+                customer=repository.customer,
+            ),
+            redis,
+            repository,
+        )
+
+    assert error.value.status_code == 403
+    assert error.value.detail == "This support thread has no recorded owner. Start a new conversation."
+    assert all(not key.startswith("daily:runs:") for key in redis.values)
 
 
 @pytest.mark.asyncio
@@ -487,8 +500,7 @@ async def test_runtime_daily_limit_change_takes_effect_without_restart() -> None
 async def test_daily_run_cap_is_disabled_when_limit_is_zero() -> None:
     redis = FakeRedis({"run_id": "existing", "thread_id": "thread-existing", "status": "queued"})
 
-    assert await claim_thread_and_daily_run(redis, "thread-disabled", None, 0) == 1
-    assert redis.values["thread-owner:thread-disabled"] == ANONYMOUS_THREAD_OWNER
+    assert await claim_daily_run(redis, 0)
     assert redis.expires == {}
     assert all(not key.startswith("daily:runs:") for key in redis.values)
 

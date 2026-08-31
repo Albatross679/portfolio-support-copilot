@@ -43,22 +43,13 @@ from support_copilot.schemas import (
 settings = get_settings()
 CONSOLE_DIST = Path.cwd() / "web" / "dist"
 DAILY_RUN_KEY_PREFIX = "daily:runs:"
-THREAD_OWNER_KEY_PREFIX = "thread-owner:"
 ANONYMOUS_THREAD_OWNER = "anonymous"
-THREAD_AND_DAILY_RUN_CLAIM_SCRIPT = """
-local owner = redis.call('GET', KEYS[1])
-if owner and owner ~= ARGV[1] then return -1 end
-local limit = tonumber(ARGV[2])
-if limit ~= 0 then
-    local current = tonumber(redis.call('GET', KEYS[2]) or '0')
-    if current >= limit then return 0 end
-end
-if not owner then redis.call('SET', KEYS[1], ARGV[1]) end
-if limit ~= 0 then
-    local current = redis.call('INCR', KEYS[2])
-    if current == 1 then redis.call('EXPIRE', KEYS[2], ARGV[3]) end
-end
-return 1
+DAILY_RUN_CAP_SCRIPT = """
+local current = tonumber(redis.call('GET', KEYS[1]) or '0')
+if current >= tonumber(ARGV[1]) then return 0 end
+current = redis.call('INCR', KEYS[1])
+if current == 1 then redis.call('EXPIRE', KEYS[1], ARGV[2]) end
+return current
 """
 
 
@@ -105,24 +96,18 @@ def seconds_until_next_utc_day(now: datetime) -> int:
     return max(1, math.ceil((tomorrow.timestamp() + 86_400) - utc_now.timestamp()))
 
 
-async def claim_thread_and_daily_run(
-    redis: Any,
-    thread_id: str,
-    customer_id: int | None,
-    limit: int,
-    now: datetime | None = None,
-) -> int:
+async def claim_daily_run(redis: Any, limit: int, now: datetime | None = None) -> bool:
+    if limit == 0:
+        return True
     now = now or datetime.now(UTC)
-    owner = ANONYMOUS_THREAD_OWNER if customer_id is None else f"customer:{customer_id}"
-    return await redis.eval(
-        THREAD_AND_DAILY_RUN_CLAIM_SCRIPT,
-        2,
-        f"{THREAD_OWNER_KEY_PREFIX}{thread_id}",
+    claimed = await redis.eval(
+        DAILY_RUN_CAP_SCRIPT,
+        1,
         daily_run_key(now),
-        owner,
         limit,
         seconds_until_next_utc_day(now),
     )
+    return bool(claimed)
 
 
 async def read_run(redis: Any, run_id: str) -> dict[str, Any]:
@@ -276,21 +261,30 @@ async def create_run(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="An order selection requires a customer identity",
         )
-    thread_id = payload.thread_id or str(uuid.uuid4())
+    owner = ANONYMOUS_THREAD_OWNER if customer_id is None else f"customer:{customer_id}"
+    if payload.thread_id:
+        thread_id = payload.thread_id
+        recorded_owner = await repository.thread_owner(thread_id)
+        if recorded_owner is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This support thread has no recorded owner. Start a new conversation.",
+            )
+        if recorded_owner != owner:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This support thread cannot be continued with this customer identity.",
+            )
+    else:
+        thread_id = str(uuid.uuid4())
     daily_run_limit = await repository.daily_run_limit(settings.daily_run_limit)
-    claim_result = await claim_thread_and_daily_run(
-        redis, thread_id, customer_id, daily_run_limit
-    )
-    if claim_result == -1:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This support thread cannot be continued with this customer identity.",
-        )
-    if claim_result == 0:
+    if not await claim_daily_run(redis, daily_run_limit):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Daily demo budget is used up, come back tomorrow.",
         )
+    if payload.thread_id is None:
+        await repository.create_thread_owner(thread_id, owner)
     run_id = str(uuid.uuid4())
     preview = " ".join(payload.message.split())[:200]
     await redis.set(

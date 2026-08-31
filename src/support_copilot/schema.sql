@@ -38,6 +38,11 @@ CREATE TABLE IF NOT EXISTS runtime_settings (
   value INTEGER NOT NULL CHECK (value >= 0)
 );
 
+CREATE TABLE IF NOT EXISTS thread_owners (
+  thread_id TEXT PRIMARY KEY,
+  owner TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS help_document_embeddings (
   id BIGSERIAL PRIMARY KEY,
   document_name TEXT NOT NULL,

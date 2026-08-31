@@ -71,6 +71,23 @@ class StoreRepository:
         assert row is not None
         return int(row["value"])
 
+    async def thread_owner(self, thread_id: str) -> str | None:
+        async with self.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cur:
+                await cur.execute(
+                    "SELECT owner FROM thread_owners WHERE thread_id = %s", (thread_id,)
+                )
+                row = await cur.fetchone()
+        return str(row["owner"]) if row else None
+
+    async def create_thread_owner(self, thread_id: str, owner: str) -> None:
+        async with self.pool.connection() as conn:
+            await conn.execute(
+                "INSERT INTO thread_owners (thread_id, owner) VALUES (%s, %s)",
+                (thread_id, owner),
+            )
+            await conn.commit()
+
     async def identify_customer(self, name: str, email: str) -> CustomerIdentity | None:
         async with self.pool.connection() as conn:
             async with conn.cursor(row_factory=dict_row) as cur:
